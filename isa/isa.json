@@ -1,0 +1,214 @@
+{
+  "meta": {
+    "name": "DeckCPU",
+    "version": "0.1.0",
+    "word_bits": 32,
+    "instruction_bits": 32,
+    "byte_order": "little",
+    "num_gpr": 16,
+    "gpr_field_bits": 4,
+    "pc_bits": 32,
+    "stack_grows": "down",
+    "stack_full_descending": true,
+    "reset_pc": "0x00000000",
+    "reset_sp": "0x0000FFFC",
+    "status": "Phase 1 - design spec, nothing implemented yet"
+  },
+
+  "formats": {
+    "R": {
+      "desc": "3-register ALU / register move",
+      "fields": {
+        "op":   {"msb": 31, "lsb": 24},
+        "rd":   {"msb": 23, "lsb": 20},
+        "rs1":  {"msb": 19, "lsb": 16},
+        "rs2":  {"msb": 15, "lsb": 12},
+        "funct": {"msb": 11, "lsb": 8},
+        "spare": {"msb": 7,  "lsb": 0}
+      }
+    },
+    "I": {
+      "desc": "immediate / load-store with offset",
+      "fields": {
+        "op":   {"msb": 31, "lsb": 24},
+        "rd":   {"msb": 23, "lsb": 20},
+        "rs1":  {"msb": 19, "lsb": 16},
+        "imm16": {"msb": 15, "lsb": 0}
+      }
+    },
+    "B": {
+      "desc": "branch / jump",
+      "fields": {
+        "op":   {"msb": 31, "lsb": 24},
+        "rs1":  {"msb": 23, "lsb": 20},
+        "rs2":  {"msb": 19, "lsb": 16},
+        "off16": {"msb": 15, "lsb": 0}
+      }
+    }
+  },
+
+  "flags": {
+    "I": {"bit": 0, "desc": "interrupt enable (I=1 allows IRQ entry)"},
+    "Z": {"bit": 1, "desc": "result zero"},
+    "N": {"bit": 2, "desc": "result negative (bit 31 of result)"},
+    "C": {"bit": 3, "desc": "carry out / borrow from arithmetic, shift-out for shifts"},
+    "V": {"bit": 4, "desc": "signed overflow"}
+  },
+
+  "interrupts": {
+    "global_enable": "FLAGS.I",
+    "vector_base": "0x00000000",
+    "slots": 8,
+    "slot_bytes": 4,
+    "entry_model": "on IRQ: push PC, push FLAGS, clear FLAGS.I, PC = vector_base + 4*slot; slot holds a JMP to the handler. IRET pops FLAGS, pops PC.",
+    "assignments": [
+      {"slot": 0, "source": "RESET", "note": "reset enters with PC=vector_base, slot 0 is the first instruction"},
+      {"slot": 1, "source": "TIMER", "note": ""},
+      {"slot": 2, "source": "UART_RX", "note": ""},
+      {"slot": 3, "source": "UART_TX", "note": ""},
+      {"slot": 4, "source": "GPIO", "note": ""},
+      {"slot": 5, "source": "SPI", "note": ""},
+      {"slot": 6, "source": "RESERVED", "note": ""},
+      {"slot": 7, "source": "RESERVED", "note": ""}
+    ]
+  },
+
+  "memory_map": [
+    {
+      "name": "RAM",
+      "base": "0x00000000",
+      "size": "0x00010000",
+      "access": "rw",
+      "desc": "64 KiB byte-addressable SRAM. Holds IVT (0x0-0x1F), code, data, and the stack (grows down from 0x0000FFFC).",
+      "registers": []
+    },
+    {
+      "name": "UART",
+      "base": "0x40000000",
+      "size": "0x00001000",
+      "access": "mmio",
+      "desc": "Simulated UART. TXD writes produce terminal output on the host.",
+      "registers": [
+        {"offset": "0x00", "name": "TXD",   "a": "WO", "desc": "transmit byte"},
+        {"offset": "0x04", "name": "RXD",   "a": "RO", "desc": "received byte"},
+        {"offset": "0x08", "name": "STS",   "a": "RO", "desc": "bit0 TX_BUSY, bit1 RX_READY, bit2 TX_READY"},
+        {"offset": "0x0C", "name": "CTRL",  "a": "RW", "desc": "bit0 TX_EN, bit1 RX_EN"},
+        {"offset": "0x10", "name": "BAUD",  "a": "RW", "desc": "baud divisor for the *model* (host console speed is fixed)"}
+      ]
+    },
+    {
+      "name": "TIMER",
+      "base": "0x40001000",
+      "size": "0x00001000",
+      "access": "mmio",
+      "desc": "Free-running compare timer with match interrupt.",
+      "registers": [
+        {"offset": "0x00", "name": "CTRL",    "a": "RW", "desc": "bit0 ENABLE, bit1 IRQ_EN, bit2 REPEAT (0=one-shot,1=periodic)"},
+        {"offset": "0x04", "name": "PRESCALE", "a": "RW", "desc": "clock divider; COUNT ticks when prescaler underflows"},
+        {"offset": "0x08", "name": "COMPARE", "a": "RW", "desc": "match value"},
+        {"offset": "0x0C", "name": "COUNT",   "a": "RW", "desc": "current count (starts at 0)"},
+        {"offset": "0x10", "name": "IRQ_STS", "a": "RW", "desc": "bit0 MATCH; write 1 to clear (acknowledge)"}
+      ]
+    },
+    {
+      "name": "GPIO",
+      "base": "0x40002000",
+      "size": "0x00001000",
+      "access": "mmio",
+      "desc": "32 simulated input/output pins.",
+      "registers": [
+        {"offset": "0x00", "name": "DIR",     "a": "RW", "desc": "bit per pin: 0=input, 1=output"},
+        {"offset": "0x04", "name": "OUT",     "a": "RW", "desc": "output data"},
+        {"offset": "0x08", "name": "IN",      "a": "RO", "desc": "input data (driven by virtual peripherals)"},
+        {"offset": "0x0C", "name": "PULL",    "a": "RW", "desc": "pull config per pin"},
+        {"offset": "0x10", "name": "IRQ_STS", "a": "RW", "desc": "edge event bits; write 1 to clear"},
+        {"offset": "0x14", "name": "IRQ_MASK","a": "RW", "desc": "per-pin IRQ enable"}
+      ]
+    },
+    {
+      "name": "SPI",
+      "base": "0x40003000",
+      "size": "0x00001000",
+      "access": "mmio",
+      "desc": "Simulated SPI master/slave used by virtual peripherals (e.g. MPU6050).",
+      "registers": [
+        {"offset": "0x00", "name": "CTRL", "a": "RW", "desc": "bit0 ENABLE, bit1 MODE (0=master,1=slave)"},
+        {"offset": "0x04", "name": "BAUD", "a": "RW", "desc": "SCK divisor"},
+        {"offset": "0x08", "name": "TX",   "a": "WO", "desc": "write = start transfer"},
+        {"offset": "0x0C", "name": "RX",   "a": "RO", "desc": "shifted-in byte"},
+        {"offset": "0x10", "name": "STS",  "a": "RO", "desc": "bit0 BUSY"}
+      ]
+    }
+  ],
+
+  "instructions": [
+    {
+      "mnemonic": "NOP",
+      "opcode": "0x00",
+      "format": "R",
+      "operands": [],
+      "semantics": "do nothing",
+      "flags_set": [],
+      "cycles": 3,
+      "mem": "none",
+      "desc": "All-zeros word. Decoder treats opcode 0x00 as NOP regardless of other bits in Phase 1.",
+      "status": "planned"
+    },
+    {"mnemonic":"ADD","opcode": "0x01","format":"R","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"rs2","role":"read"}],"semantics":"rd = rs1 + rs2","flags_set":["Z","N","C","V"],"cycles":4,"mem":"none","desc":"two's-complement add","status":"planned"},
+    {"mnemonic":"SUB","opcode": "0x02","format":"R","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"rs2","role":"read"}],"semantics":"rd = rs1 - rs2","flags_set":["Z","N","C","V"],"cycles":4,"mem":"none","desc":"C = borrow (0 when result >= 0 unsigned), sets overflow","status":"planned"},
+    {"mnemonic":"MUL","opcode": "0x03","format":"R","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"rs2","role":"read"}],"semantics":"rd = (rs1 * rs2)[31:0]","flags_set":["Z","N"],"cycles":4,"mem":"none","desc":"low 32 bits of product; C,V cleared","status":"planned"},
+    {"mnemonic":"AND","opcode": "0x04","format":"R","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"rs2","role":"read"}],"semantics":"rd = rs1 & rs2","flags_set":["Z","N"],"cycles":4,"mem":"none","desc":"C,V cleared","status":"planned"},
+    {"mnemonic":"OR","opcode": "0x05","format":"R","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"rs2","role":"read"}],"semantics":"rd = rs1 | rs2","flags_set":["Z","N"],"cycles":4,"mem":"none","desc":"C,V cleared","status":"planned"},
+    {"mnemonic":"XOR","opcode": "0x06","format":"R","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"rs2","role":"read"}],"semantics":"rd = rs1 ^ rs2","flags_set":["Z","N"],"cycles":4,"mem":"none","desc":"C,V cleared","status":"planned"},
+    {"mnemonic":"NOT","opcode": "0x07","format":"R","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"}],"semantics":"rd = ~rs1","flags_set":["Z","N"],"cycles":4,"mem":"none","desc":"unary; rs2 must be 0","status":"planned"},
+    {"mnemonic":"SHL","opcode": "0x08","format":"R","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"rs2","role":"read"}],"semantics":"rd = rs1 << (rs2[4:0])","flags_set":["Z","N","C"],"cycles":4,"mem":"none","desc":"C = last bit shifted out, V cleared","status":"planned"},
+    {"mnemonic":"SHR","opcode": "0x09","format":"R","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"rs2","role":"read"}],"semantics":"rd = rs1 >> (rs2[4:0])","flags_set":["Z","N","C"],"cycles":4,"mem":"none","desc":"logical shift; C = last bit shifted out, V cleared","status":"planned"},
+    {"mnemonic":"CMP","opcode": "0x0A","format":"R","operands":[{"name":"rs1","role":"read"},{"name":"rs2","role":"read"}],"semantics":"flags = rs1 - rs2 (no writeback)","flags_set":["Z","N","C","V"],"cycles":4,"mem":"none","desc":"rd must be 0; supports signed/unsigned compare branches","status":"planned"},
+
+    {"mnemonic":"ADDI","opcode": "0x11","format":"I","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"imm","role":"imm","sign":"s"}],"semantics":"rd = rs1 + sext(imm16)","flags_set":["Z","N","C","V"],"cycles":4,"mem":"none","desc":"","status":"planned"},
+    {"mnemonic":"SUBI","opcode": "0x12","format":"I","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"imm","role":"imm","sign":"s"}],"semantics":"rd = rs1 - sext(imm16)","flags_set":["Z","N","C","V"],"cycles":4,"mem":"none","desc":"","status":"planned"},
+    {"mnemonic":"MULI","opcode": "0x13","format":"I","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"imm","role":"imm","sign":"s"}],"semantics":"rd = (rs1 * sext(imm16))[31:0]","flags_set":["Z","N"],"cycles":4,"mem":"none","desc":"","status":"planned"},
+    {"mnemonic":"ANDI","opcode": "0x14","format":"I","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"imm","role":"imm","sign":"s"}],"semantics":"rd = rs1 & sext(imm16)","flags_set":["Z","N"],"cycles":4,"mem":"none","desc":"","status":"planned"},
+    {"mnemonic":"ORI","opcode": "0x15","format":"I","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"imm","role":"imm","sign":"s"}],"semantics":"rd = rs1 | sext(imm16)","flags_set":["Z","N"],"cycles":4,"mem":"none","desc":"","status":"planned"},
+    {"mnemonic":"XORI","opcode": "0x16","format":"I","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"imm","role":"imm","sign":"s"}],"semantics":"rd = rs1 ^ sext(imm16)","flags_set":["Z","N"],"cycles":4,"mem":"none","desc":"","status":"planned"},
+    {"mnemonic":"SHLI","opcode": "0x17","format":"I","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"shamt","role":"imm","width":5}],"semantics":"rd = rs1 << (imm16[4:0])","flags_set":["Z","N","C"],"cycles":4,"mem":"none","desc":"","status":"planned"},
+    {"mnemonic":"SHRI","opcode": "0x18","format":"I","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"shamt","role":"imm","width":5}],"semantics":"rd = rs1 >> (imm16[4:0])","flags_set":["Z","N","C"],"cycles":4,"mem":"none","desc":"logical","status":"planned"},
+    {"mnemonic":"CMPI","opcode": "0x19","format":"I","operands":[{"name":"rs1","role":"read"},{"name":"imm","role":"imm","sign":"s"}],"semantics":"flags = rs1 - sext(imm16) (no writeback)","flags_set":["Z","N","C","V"],"cycles":4,"mem":"none","desc":"rd must be 0","status":"planned"},
+
+    {"mnemonic":"LI","opcode": "0x20","format":"I","operands":[{"name":"rd","role":"write"},{"name":"imm","role":"imm","sign":"u"}],"semantics":"rd = zext(imm16)","flags_set":[],"cycles":4,"mem":"none","desc":"zero-extended 16-bit immediate","status":"planned"},
+    {"mnemonic":"LIH","opcode": "0x21","format":"I","operands":[{"name":"rd","role":"write"},{"name":"imm","role":"imm","sign":"u"}],"semantics":"rd = {imm16, 16'h0000}","flags_set":[],"cycles":4,"mem":"none","desc":"16-bit immediate into high half; LI+LIH build full 32-bit constants","status":"planned"},
+    {"mnemonic":"MOV","opcode": "0x22","format":"R","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"}],"semantics":"rd = rs1","flags_set":[],"cycles":4,"mem":"none","desc":"register-to-register copy","status":"planned"},
+
+    {"mnemonic":"LD","opcode": "0x30","format":"I","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read","role_note":"base address register"},{"name":"off","role":"imm","sign":"s"}],"semantics":"rd = mem32[rs1 + sext(imm16)]","flags_set":[],"cycles":5,"mem":"read 4 bytes","alias":["LOAD"],"desc":"32-bit load","status":"planned"},
+    {"mnemonic":"LD.H","opcode": "0x31","format":"I","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read","role_note":"base address register"},{"name":"off","role":"imm","sign":"s"}],"semantics":"rd = zext32(mem16[rs1 + sext(imm16)])","flags_set":[],"cycles":5,"mem":"read 2 bytes","desc":"16-bit load, zero-extended","status":"planned"},
+    {"mnemonic":"LD.B","opcode": "0x32","format":"I","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read","role_note":"base address register"},{"name":"off","role":"imm","sign":"s"}],"semantics":"rd = zext32(mem8[rs1 + sext(imm16)])","flags_set":[],"cycles":5,"mem":"read 1 byte","desc":"8-bit load, zero-extended","status":"planned"},
+    {"mnemonic":"ST","opcode": "0x34","format":"I","operands":[{"name":"rs_data","role":"read","field":"rd","role_note":"value to store (encoded in rd field)"},{"name":"rs1","role":"read","role_note":"base address register"},{"name":"off","role":"imm","sign":"s"}],"semantics":"mem32[rs1 + sext(imm16)] = rs_data","flags_set":[],"cycles":4,"mem":"write 4 bytes","alias":["STORE"],"desc":"32-bit store; NOTE: data register lives in the rd field","status":"planned"},
+    {"mnemonic":"ST.H","opcode": "0x35","format":"I","operands":[{"name":"rs_data","role":"read","field":"rd","role_note":"value to store (encoded in rd field)"},{"name":"rs1","role":"read","role_note":"base address register"},{"name":"off","role":"imm","sign":"s"}],"semantics":"mem16[rs1 + sext(imm16)] = rs_data[15:0]","flags_set":[],"cycles":4,"mem":"write 2 bytes","desc":"16-bit store","status":"planned"},
+    {"mnemonic":"ST.B","opcode": "0x36","format":"I","operands":[{"name":"rs_data","role":"read","field":"rd","role_note":"value to store (encoded in rd field)"},{"name":"rs1","role":"read","role_note":"base address register"},{"name":"off","role":"imm","sign":"s"}],"semantics":"mem8[rs1 + sext(imm16)] = rs_data[7:0]","flags_set":[],"cycles":4,"mem":"write 1 byte","desc":"8-bit store","status":"planned"},
+
+    {"mnemonic":"JMP","opcode": "0x40","format":"B","operands":[{"name":"off","role":"imm","sign":"s","kind":"pc_rel"}],"semantics":"PC = PC + sext(off16)","flags_set":[],"cycles":4,"mem":"none","desc":"off16 is a byte offset, must be a multiple of 4","status":"planned"},
+    {"mnemonic":"CALL","opcode": "0x41","format":"B","operands":[{"name":"off","role":"imm","sign":"s","kind":"pc_rel"}],"semantics":"push PC(return); PC = PC + sext(off16)","flags_set":[],"cycles":4,"mem":"write 4 bytes","desc":"full-descending stack link for subroutine calls","status":"planned"},
+    {"mnemonic":"RET","opcode": "0x42","format":"B","operands":[],"semantics":"PC = pop()","flags_set":[],"cycles":5,"mem":"read 4 bytes","desc":"pops return address into PC","status":"planned"},
+    {"mnemonic":"JMPR","opcode": "0x43","format":"R","operands":[{"name":"rs1","role":"read"}],"semantics":"PC = rs1","flags_set":[],"cycles":4,"mem":"none","desc":"absolute jump through register; for dispatch tables","status":"planned"},
+    {"mnemonic":"BEQ","opcode": "0x44","format":"B","operands":[{"name":"rs1","role":"read"},{"name":"rs2","role":"read"},{"name":"off","role":"imm","sign":"s","kind":"pc_rel"}],"semantics":"if rs1 == rs2 then PC = PC + sext(off16)","flags_set":[],"flags_used":["Z"],"cycles":4,"mem":"none","desc":"off16 byte offset, multiple of 4","status":"planned"},
+    {"mnemonic":"BNE","opcode": "0x45","format":"B","operands":[{"name":"rs1","role":"read"},{"name":"rs2","role":"read"},{"name":"off","role":"imm","sign":"s","kind":"pc_rel"}],"semantics":"if rs1 != rs2 then PC = PC + sext(off16)","flags_set":[],"flags_used":["Z"],"cycles":4,"mem":"none","desc":"","status":"planned"},
+    {"mnemonic":"BLT","opcode": "0x46","format":"B","operands":[{"name":"rs1","role":"read"},{"name":"rs2","role":"read"},{"name":"off","role":"imm","sign":"s","kind":"pc_rel"}],"semantics":"if rs1 < rs2 (signed) then PC = PC + sext(off16)","flags_set":[],"flags_used":["N","V"],"cycles":4,"mem":"none","desc":"uses N != V","status":"planned"},
+    {"mnemonic":"BGE","opcode": "0x47","format":"B","operands":[{"name":"rs1","role":"read"},{"name":"rs2","role":"read"},{"name":"off","role":"imm","sign":"s","kind":"pc_rel"}],"semantics":"if rs1 >= rs2 (signed) then PC = PC + sext(off16)","flags_set":[],"flags_used":["N","V"],"cycles":4,"mem":"none","desc":"uses N == V","status":"planned"},
+    {"mnemonic":"BLTU","opcode": "0x48","format":"B","operands":[{"name":"rs1","role":"read"},{"name":"rs2","role":"read"},{"name":"off","role":"imm","sign":"s","kind":"pc_rel"}],"semantics":"if rs1 < rs2 (unsigned) then PC = PC + sext(off16)","flags_set":[],"flags_used":["C"],"cycles":4,"mem":"none","desc":"uses borrow C=1","status":"planned"},
+    {"mnemonic":"BGEU","opcode": "0x49","format":"B","operands":[{"name":"rs1","role":"read"},{"name":"rs2","role":"read"},{"name":"off","role":"imm","sign":"s","kind":"pc_rel"}],"semantics":"if rs1 >= rs2 (unsigned) then PC = PC + sext(off16)","flags_set":[],"flags_used":["C"],"cycles":4,"mem":"none","desc":"uses borrow C=0","status":"planned"},
+
+    {"mnemonic":"PUSH","opcode": "0x50","format":"R","operands":[{"name":"rs1","role":"read"}],"semantics":"SP = SP - 4; mem32[SP] = rs1","flags_set":[],"cycles":4,"mem":"write 4 bytes","desc":"","status":"planned"},
+    {"mnemonic":"POP","opcode": "0x51","format":"R","operands":[{"name":"rd","role":"write"}],"semantics":"rd = mem32[SP]; SP = SP + 4","flags_set":[],"cycles":5,"mem":"read 4 bytes","desc":"","status":"planned"},
+
+    {"mnemonic":"RDSP","opcode": "0x52","format":"R","operands":[{"name":"rd","role":"write"}],"semantics":"rd = SP","flags_set":[],"cycles":4,"mem":"none","desc":"read the dedicated stack pointer","status":"planned"},
+    {"mnemonic":"WRSP","opcode": "0x53","format":"R","operands":[{"name":"rs1","role":"read"}],"semantics":"SP = rs1","flags_set":[],"cycles":4,"mem":"none","desc":"set the dedicated stack pointer","status":"planned"},
+    {"mnemonic":"RDFLAG","opcode": "0x54","format":"R","operands":[{"name":"rd","role":"write"}],"semantics":"rd = FLAGS","flags_set":[],"cycles":4,"mem":"none","desc":"read status register","status":"planned"},
+    {"mnemonic":"WRFLAG","opcode": "0x55","format":"R","operands":[{"name":"rs1","role":"read"}],"semantics":"FLAGS = rs1","flags_set":["I","Z","N","C","V"],"cycles":4,"mem":"none","desc":"write entire status register","status":"planned"},
+
+    {"mnemonic":"EI","opcode": "0x56","format":"R","operands":[],"semantics":"FLAGS.I = 1","flags_set":["I"],"cycles":3,"mem":"none","desc":"enable interrupts","status":"planned"},
+    {"mnemonic":"DI","opcode": "0x57","format":"R","operands":[],"semantics":"FLAGS.I = 0","flags_set":["I"],"cycles":3,"mem":"none","desc":"disable interrupts","status":"planned"},
+    {"mnemonic":"IRET","opcode": "0x58","format":"B","operands":[],"semantics":"FLAGS = pop(); PC = pop()","flags_set":["I","Z","N","C","V"],"cycles":5,"mem":"read 8 bytes","desc":"interrupt return; must be last-returned from handler pushed by IRQ entry","status":"planned"},
+
+    {"mnemonic":"HALT","opcode": "0x60","format":"R","operands":[],"semantics":"stop execution; PC stays","flags_set":[],"cycles":3,"mem":"none","desc":"CPU enters halted state until reset; asserts dbg.halted","status":"planned"}
+  ]
+}

@@ -1,0 +1,18 @@
+# Build artifacts
+build/
+sim_out/
+obj_dir/
+
+# Icarus / Verilator outputs
+*.vcd
+*.lxt
+*.fst
+*.vpd
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor / OS
+*.swp
+.DS_Store
