@@ -134,7 +134,7 @@ Field ordering is MSB-first; the whole word is little-endian in memory.
 | `WRFLAG` | `0x55` | R | `rs1` | FLAGS = rs1 | I, Z, N, C, V | 4 | none |
 | `EI` | `0x56` | R | `–` | FLAGS.I = 1 | I | 3 | none |
 | `DI` | `0x57` | R | `–` | FLAGS.I = 0 | I | 3 | none |
-| `IRET` | `0x58` | B | `–` | FLAGS = pop(); PC = pop() | I, Z, N, C, V | 5 | read 8 bytes |
+| `IRET` | `0x58` | B | `–` | FLAGS = pop(); PC = pop() | I, Z, N, C, V | 6 | read 8 bytes |
 | `HALT` | `0x60` | R | `–` | stop execution; PC stays | – | 3 | none |
 
 ## Canonical encoding rules

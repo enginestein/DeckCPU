@@ -9,7 +9,11 @@
 
 module decoder import deckcpu_pkg::*; (
     input  logic [31:0] instr,
-    output decoded_instr_t d
+    output decoded_instr_t d,
+    output logic sel_add, sel_sub, sel_mul,
+    output logic sel_and, sel_or, sel_xor, sel_not,
+    output logic sel_shl, sel_shr,
+    output logic sel_a, sel_b
 );
     always_comb begin
         // zero-control default (NOP-like)
@@ -117,6 +121,31 @@ module decoder import deckcpu_pkg::*; (
                               d.mem_re=1'b1; d.mem_sz=SZ_WORD; d.alu_op=ALU_ADD; d.alu_a_sp=1'b1; d.alu_b_four=1'b1; end
 
             OP_HALT: begin d.halt=1'b1; end
+            default: ;
+        endcase
+    end
+
+    // one-hot ALU function selects. These LEAVE this module as single-bit
+    // scalars (netlist paths) because Icarus 11 delta-storms when a
+    // procedural always_comb in the ALU re-evaluates on the multi-bit
+    // enum/d.alu_op churn across module boundaries. The alu itself is a
+    // continuous-assignment netlist.
+    always_comb begin
+        sel_add = 1'b0; sel_sub = 1'b0; sel_mul = 1'b0;
+        sel_and = 1'b0; sel_or = 1'b0; sel_xor = 1'b0; sel_not = 1'b0;
+        sel_shl = 1'b0; sel_shr = 1'b0; sel_a = 1'b0; sel_b = 1'b0;
+        case (d.alu_op)
+            ALU_ADD: sel_add = 1'b1;
+            ALU_SUB: sel_sub = 1'b1;
+            ALU_MUL: sel_mul = 1'b1;
+            ALU_AND: sel_and = 1'b1;
+            ALU_OR:  sel_or  = 1'b1;
+            ALU_XOR: sel_xor = 1'b1;
+            ALU_NOT: sel_not = 1'b1;
+            ALU_SHL: sel_shl = 1'b1;
+            ALU_SHR: sel_shr = 1'b1;
+            ALU_A:   sel_a   = 1'b1;
+            ALU_B:   sel_b   = 1'b1;
             default: ;
         endcase
     end

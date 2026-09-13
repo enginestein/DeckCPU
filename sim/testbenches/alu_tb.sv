@@ -9,6 +9,31 @@ module alu_tb;
   alu_op_t     op;
   int          fails = 0, checks = 0;
 
+  logic sel_add, sel_sub, sel_mul, sel_and, sel_or, sel_xor, sel_not;
+  logic sel_shl, sel_shr, sel_a, sel_b;
+
+  // one-hot select decode from the module-level enum (drives the rewritten
+  // continuous-assignment ALU; see rtl/alu/alu.sv).
+  always_comb begin
+    sel_add = 1'b0; sel_sub = 1'b0; sel_mul = 1'b0; sel_and = 1'b0;
+    sel_or  = 1'b0; sel_xor = 1'b0; sel_not = 1'b0; sel_shl = 1'b0;
+    sel_shr = 1'b0; sel_a   = 1'b0; sel_b   = 1'b0;
+    unique case (op)
+      ALU_ADD: sel_add = 1'b1;
+      ALU_SUB: sel_sub = 1'b1;
+      ALU_MUL: sel_mul = 1'b1;
+      ALU_AND: sel_and = 1'b1;
+      ALU_OR:  sel_or  = 1'b1;
+      ALU_XOR: sel_xor = 1'b1;
+      ALU_NOT: sel_not = 1'b1;
+      ALU_SHL: sel_shl = 1'b1;
+      ALU_SHR: sel_shr = 1'b1;
+      ALU_A:   sel_a   = 1'b1;
+      ALU_B:   sel_b   = 1'b1;
+      default: ;
+    endcase
+  end
+
   alu #(.W(32)) dut (.*);
 
   // Compares DUT outputs against the reference just after driving a,b.

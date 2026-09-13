@@ -1,8 +1,8 @@
 # DeckCPU Verification
 
-> **Status: Phase 2 green.** `make test` runs ISA/docs cross-checks, Verilator
-> lint on all sources, and Icarus simulation of every testbench
-> (`pkg_smoke`, `alu`, `regfile`, `decoder`, `branch_cond`).
+> **Status: Phase 3 green.** `make test` runs ISA/docs cross-checks, Verilator
+> lint on all synthesizable sources, and Icarus simulation of every testbench
+> (`pkg_smoke`, `alu`, `regfile`, `decoder`, `branch_cond`, `cpu_fsm`, `cpu`).
 
 ## Regression (`make test`)
 
@@ -12,7 +12,9 @@ Everything below runs from a single command. Phase 1 already wires up:
   `tools/check_pkg_isa.py` (RTL package opcodes match `isa/isa.json`).
 - **docs-check** — regenerates `docs/isa.md` + `docs/memory-map.md` into a
   scratch dir and diffs against the committed copies.
-- **lint** — Verilator `--lint-only` gate on all RTL + testbench sources.
+- **lint** — Verilator `--lint-only` gate on RTL + synthesizable testbenches
+  (the CPU testbenches sequence `@(posedge clk)` timing controls that
+  Verilator 4.038 cannot schedule, so they are Icarus-only).
 - **sim** — Icarus compile + run of every testbench.
 
 ## Executing
@@ -23,8 +25,8 @@ Everything below runs from a single command. Phase 1 already wires up:
 | Regfile | `regfile_tb.sv` | read ports, write port, reset | ✅ |
 | Decoder | `decoder_tb.sv` | every opcode decodes to expected control word (golden vectors from `isa.json`); reserved fields ignored | ✅ 258 checks |
 | Branch cond | `branch_cond_tb.sv` | 6 conditions × 16 flag combinations vs boolean reference | ✅ 96 checks |
-| Control FSM | `cpu_fsm_tb.sv` | cycle counts per class; reset; HALT; interrupt entry | ⬜ Phase 3 |
-| CPU | `cpu_tb.sv` | golden execution of small asm programs; register/flag/PC traces | ⬜ Phase 3 |
+| Control FSM | `cpu_fsm_tb.sv` | cycle counts per class; reset; bus-error halt; HALT park; EI/DI flag | ✅ |
+| CPU | `cpu_tb.sv` | golden execution of asm program: regs/flags/PC/memory side-effects, CALL/RET/IRET, POP/PUSH, LD/ST | ✅ |
 | RAM | `ram_tb.sv` | byte/halfword/word, alignment, unwritable addresses | ⬜ Phase 4 |
 | Bus | `bus_tb.sv` | decode windows, byte enables, unmapped → err | ⬜ Phase 4 |
 | Peripherals | `peripheral_tb.sv` per block | register semantics, IRQ strobes | ⬜ Phase 6 |

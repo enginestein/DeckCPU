@@ -121,7 +121,8 @@ package deckcpu_pkg;
     S_DECODE,
     S_EXEC,
     S_MEM,
-    S_WB
+    S_WB,
+    S_HALT
   } state_t;
 
   // ---- Datapath control types (Phase 2) -------------------------------------

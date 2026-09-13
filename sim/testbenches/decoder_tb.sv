@@ -13,6 +13,9 @@ module decoder_tb;
   int cur_i = 0;
   int tag = 0;
 
+  logic sel_add, sel_sub, sel_mul, sel_and, sel_or, sel_xor, sel_not;
+  logic sel_shl, sel_shr, sel_a, sel_b;
+
   decoder dut (.*);
 
   `include "decoder_vectors.svh"

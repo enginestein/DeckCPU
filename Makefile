@@ -27,7 +27,14 @@ SIM_DIR   := $(BUILD_DIR)/sim
 PKG_SRC := rtl/pkg/deckcpu_pkg.sv
 RTL_SRCS := $(PKG_SRC) $(shell find rtl -name '*.sv' ! -path 'rtl/pkg/*' | sort)
 TB_DIR   := sim/testbenches
-TESTS    := pkg_smoke alu regfile decoder branch_cond
+PROG_DIR := sim/programs
+TESTS    := pkg_smoke alu regfile decoder branch_cond cpu_fsm cpu
+
+# The CPU testbenches drive the DUT with sequences of @(posedge clk) timing
+# controls inside initial blocks, which Verilator 4.038 cannot schedule
+# ("one timing control per procedure"). They are Icarus-only; lint is scoped
+# to the synthesizable checkbenches.
+LINT_TESTS := pkg_smoke alu regfile decoder branch_cond
 
 ISA_JSON    := isa/isa.json
 GEN_HEADER  := $(GEN_DIR)/decoder_vectors.svh
@@ -48,9 +55,9 @@ $(GEN_HEADER): $(TOOLS) $(ISA_JSON)
 	python3 tools/isa_tools.py vectors $(ISA_JSON) $@
 
 # ---- per-test Icarus simulation binary ----
-$(SIM_DIR)/%: $(RTL_SRCS) $(TB_DIR)/%_tb.sv $(GEN_HEADER)
+$(SIM_DIR)/%: $(RTL_SRCS) $(TB_DIR)/%_tb.sv $(GEN_HEADER) $(wildcard $(PROG_DIR)/*_words.svh)
 	@mkdir -p $(SIM_DIR)
-	$(SIM) $(SIMFLAGS) -I $(GEN_DIR) -o $@ $(RTL_SRCS) $(TB_DIR)/$*_tb.sv
+	$(SIM) $(SIMFLAGS) -I $(GEN_DIR) -I $(TB_DIR) -I $(PROG_DIR) -o $@ $(RTL_SRCS) $(TB_DIR)/$*_tb.sv
 
 # Per-test run/lint targets are generated explicitly (pattern-rule recipes
 # for phony goals behave unpredictably in GNU make 4.3).
@@ -67,7 +74,7 @@ define LINT_mk
 lint-$(1): $(RTL_SRCS) $(TB_DIR)/$(1)_tb.sv $(GEN_HEADER)
 	@mkdir -p $(BUILD_DIR)
 	$(VERILATOR) --lint-only -Wall -Wno-fatal -Wno-DECLFILENAME \
-		-I$(GEN_DIR) -top-module $(1)_tb $(RTL_SRCS) $(TB_DIR)/$(1)_tb.sv \
+		-I$(GEN_DIR) -I$(TB_DIR) -I$(PROG_DIR) -top-module $(1)_tb $(RTL_SRCS) $(TB_DIR)/$(1)_tb.sv \
 		>/dev/null 2>$(BUILD_DIR)/lint-$(1).log || \
 		{ cat $(BUILD_DIR)/lint-$(1).log; exit 1; }
 	@echo "lint:$(1) OK"
@@ -76,7 +83,7 @@ $(foreach t,$(TESTS),$(eval $(call LINT_mk,$(t))))
 
 compile: $(SIM_BINS)
 
-lint: $(addprefix lint-,$(TESTS))
+lint: $(addprefix lint-,$(LINT_TESTS))
 	@echo "verilator lint OK"
 
 sim: $(addprefix run-,$(TESTS))

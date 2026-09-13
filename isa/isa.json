@@ -207,7 +207,7 @@
 
     {"mnemonic":"EI","opcode": "0x56","format":"R","operands":[],"semantics":"FLAGS.I = 1","flags_set":["I"],"cycles":3,"mem":"none","desc":"enable interrupts","status":"planned"},
     {"mnemonic":"DI","opcode": "0x57","format":"R","operands":[],"semantics":"FLAGS.I = 0","flags_set":["I"],"cycles":3,"mem":"none","desc":"disable interrupts","status":"planned"},
-    {"mnemonic":"IRET","opcode": "0x58","format":"B","operands":[],"semantics":"FLAGS = pop(); PC = pop()","flags_set":["I","Z","N","C","V"],"cycles":5,"mem":"read 8 bytes","desc":"interrupt return; must be last-returned from handler pushed by IRQ entry","status":"planned"},
+    {"mnemonic":"IRET","opcode": "0x58","format":"B","operands":[],"semantics":"FLAGS = pop(); PC = pop()","flags_set":["I","Z","N","C","V"],"cycles":6,"mem":"read 8 bytes","desc":"interrupt return; must be last-returned from handler pushed by IRQ entry","status":"planned"},
 
     {"mnemonic":"HALT","opcode": "0x60","format":"R","operands":[],"semantics":"stop execution; PC stays","flags_set":[],"cycles":3,"mem":"none","desc":"CPU enters halted state until reset; asserts dbg.halted","status":"planned"}
   ]
