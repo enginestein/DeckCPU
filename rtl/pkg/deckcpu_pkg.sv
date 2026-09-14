@@ -1,5 +1,5 @@
 // DeckCPU common constants and types.
-// Phase 1: package only; mirrors isa/isa.json.
+// Shared types/constants; mirrors isa/isa.json.
 // Keep the opcode enum byte values in lock-step with isa/isa.json.
 package deckcpu_pkg;
 
@@ -116,16 +116,22 @@ package deckcpu_pkg;
   localparam int SPI_NUM    = 8;                          // sources handled (incl reset)
 
   // ---- Execution FSM states ------------------------------------------------
+  // Two dedicated interrupt-entry states walk the two stack pushes (PC then
+  // FLAGS) over the single memory bus, mirroring how IRET walks its two pops
+  // across two S_MEM cycles. They are appended so the existing state numbering
+  // (S_FETCH..S_HALT) is unchanged.
   typedef enum logic [2:0] {
     S_FETCH,
     S_DECODE,
     S_EXEC,
     S_MEM,
     S_WB,
-    S_HALT
+    S_HALT,
+    S_IRQ_PC,   // interrupt entry: push PC   at [SP-4]
+    S_IRQ_FL    // interrupt entry: push FLAGS at [SP-8], clear I, PC <- vector
   } state_t;
 
-  // ---- Datapath control types (Phase 2) -------------------------------------
+  // ---- Datapath control types --------------------------------------------------
   // ALU function select (drives rtl/alu/alu.sv).
   typedef enum logic [3:0] {
     ALU_ADD,

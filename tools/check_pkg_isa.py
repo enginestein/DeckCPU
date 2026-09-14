@@ -2,7 +2,7 @@
 """Cross-check deckcpu_pkg.sv opcode enum against isa/isa.json.
 
 Fails if the RTL package and the ISA specification disagree on any opcode
-byte value. This is the Phase-1 guarantee that the authoritative spec
+byte value. This is the guarantee that the authoritative spec
 drives the RTL.
 
 Usage:

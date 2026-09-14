@@ -12,7 +12,7 @@
     "stack_full_descending": true,
     "reset_pc": "0x00000000",
     "reset_sp": "0x0000FFFC",
-    "status": "Phase 1 - design spec, nothing implemented yet"
+    "status": "implemented — verified by make test"
   },
 
   "formats": {
@@ -151,7 +151,7 @@
       "flags_set": [],
       "cycles": 3,
       "mem": "none",
-      "desc": "All-zeros word. Decoder treats opcode 0x00 as NOP regardless of other bits in Phase 1.",
+      "desc": "All-zeros word. The decoder treats opcode 0x00 as NOP regardless of the other bits.",
       "status": "planned"
     },
     {"mnemonic":"ADD","opcode": "0x01","format":"R","operands":[{"name":"rd","role":"write"},{"name":"rs1","role":"read"},{"name":"rs2","role":"read"}],"semantics":"rd = rs1 + rs2","flags_set":["Z","N","C","V"],"cycles":4,"mem":"none","desc":"two's-complement add","status":"planned"},

@@ -1,25 +1,3 @@
-// DeckCPU ALU — purely combinational.
-//
-// Phase 2/3. Single 32-bit ALU performing ADD/SUB/MUL, logic ops, shifts and
-// operand pass-throughs. Produces the Z/N/C/V status flags directly.
-//
-// Flag semantics (see docs/isa.md):
-//   ADD: C = carry out, V = signed overflow
-//   SUB: C = borrow (1 when a < b unsigned), V = signed overflow
-//   MUL/AND/OR/XOR/NOT: C=V=0, Z/N set from result
-//   SHL: C = last bit shifted out (bit W-count)
-//   SHR: C = last bit shifted out (bit count-1); logical shift
-//
-// The comparison instructions (CMP/CMPI) reuse ALU_SUB; branches derive
-// their condition from the resulting flags.
-//
-// NOTE: this module is built from CONTINUOUS ASSIGNMENTS only. Icarus 11
-// enters an unbounded t=0/delta loop when a procedural always_comb in the ALU
-// re-evaluates on the decoder's multi-bit alu_op churn (see decoder.sv for
-// the one-hot select encoding). A pure netlist settles in a bounded number of
-// gates well, so the function/select crossing is expressed as scalar selects
-// and the data path as continuous logic.
-
 module alu import deckcpu_pkg::*; #(
     parameter int W = 32
 )(

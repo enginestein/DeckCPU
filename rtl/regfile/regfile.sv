@@ -1,6 +1,6 @@
 // DeckCPU general-purpose register file.
 //
-// Phase 2. 16 x 32-bit registers r0..r15, two combinational read ports and
+// 16 x 32-bit registers r0..r15, two combinational read ports and
 // one synchronous write port with synchronous reset to zero.
 //
 // Note: r0 is a general-purpose register (no RISC-V-style hardwired zero).

@@ -1,6 +1,6 @@
 # DeckCPU Memory Map
 
-**Status:** Phase 1 - design spec, nothing implemented yet
+**Status:** implemented — verified by make test
 
 **This document is generated from `isa/isa.json`. Do not edit directly.**
 

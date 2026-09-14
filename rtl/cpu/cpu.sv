@@ -1,6 +1,6 @@
 // DeckCPU core: datapath + control FSM.
 //
-// Phase 3. Multi-cycle, non-pipelined, deterministic. The FSM walks
+// Multi-cycle, non-pipelined, deterministic. The FSM walks
 // FETCH -> DECODE -> EXECUTE -> MEM -> WRITEBACK, skipping states per
 // instruction class (ISA-mandated cycle counts in isa/isa.json):
 //
@@ -13,14 +13,20 @@
 //   IRET                       6  (FETCH, DECODE, EXEC, MEM, MEM, WB —
 //                                  two sequential word pops over single bus)
 //
-// Memory interface: a synchronous bus the Phase-4 bus/RAM will match. Reads
+// Memory interface: a synchronous bus matched by rtl/bus and rtl/memory. Reads
 // are issued during the FETCH/MEM cycle and the sampled data is latched at
 // the clock edge that ends that cycle (read data must track the address
 // during the cycle). Writes are combinational address/data + we strobe.
 //
-// Interrupts: EI/DI control FLAGS.I (irq_en). Context-switch entry/exit is
-// Phase 7; irq_ack is therefore parked at 0 here. A bus read error halts the
-// core like HALT (Phase 4 refines fault handling).
+// Interrupts: EI/DI control FLAGS.I (irq_en). At every instruction
+// boundary (the S_FETCH cycle) the core checks `irq_en && irq_req`; if both
+// hold it enters via two dedicated push states: PC is pushed at [SP-4], then
+// FLAGS is pushed at [SP-8] and FLAGS.I is cleared, then PC <- IVT_BASE +
+// 4*irq_vec. The pushed FLAGS keeps the pre-entry I bit (like MSP430 pushing
+// SR), so IRET restores it; a level source must be cleared by the handler.
+// `irq_vec[2:0]` is the slot (1..7) selected by the priority arbiter (`irq_prio`).
+// `irq_ack` pulses for one cycle during the first push. IRET already pops
+// FLAGS then PC. A bus read error halts the core like HALT.
 
 module cpu import deckcpu_pkg::*; #(
     parameter int W    = 32,
@@ -29,7 +35,7 @@ module cpu import deckcpu_pkg::*; #(
     input  logic                  clk,
     input  logic                  rst,
 
-    // memory bus (to Phase-4 bus / RAM)
+    // memory bus (to rtl/bus + rtl/memory)
     output logic                  bus_re,
     output logic                  bus_we,
     output logic [W-1:0]          bus_addr,
@@ -38,12 +44,13 @@ module cpu import deckcpu_pkg::*; #(
     input  logic [W-1:0]          bus_rdata,
     input  logic                  bus_err,
 
-    // interrupts (entry logic Phase 7)
+    // interrupts
     input  logic                  irq_req,
+    input  logic [2:0]            irq_vec,   // IVT slot (1..7) from the arbiter
     output logic                  irq_ack,
     output logic                  irq_en,
 
-    // debug bundle (documented in docs/architecture.md)
+    // debug bundle
     output state_t                dbg_state,
     output logic [W-1:0]          dbg_pc,
     output logic [W*NREG-1:0]     dbg_regs,
@@ -95,6 +102,7 @@ module cpu import deckcpu_pkg::*; #(
     logic [W-1:0]        rd_f = '0;              // IRET: popped FLAGS (first pop)
     logic [W-1:0]        rd_p = '0;              // IRET: popped PC   (second pop)
     logic                mem_phase = 1'b0;       // IRET second word
+    logic [2:0]          irq_vec_l = 3'd0;       // latched IVT slot at entry
     logic                done = 1'b0;
     logic                halted = 1'b0;
     logic [W-1:0]        cycle_count = '0;
@@ -148,7 +156,7 @@ module cpu import deckcpu_pkg::*; #(
 
     assign seq_pc = pc + 32'd4;
     assign irq_en = fl[FLAG_I];
-    assign irq_ack = 1'b0;                       // interrupt entry is Phase 7
+    assign irq_ack = (state == S_IRQ_PC);        // 1-cycle entry ack strobe
 
     always_comb begin
         imm_sext = {{16{d.imm[15]}}, d.imm};
@@ -183,17 +191,31 @@ module cpu import deckcpu_pkg::*; #(
         wb_data = (d.wb_src == WB_MEM) ? ext_rd : y_l;
     end
 
-    // memory bus drives (combinational; no transaction outside FETCH/MEM)
+    // memory bus drives (combinational; no transaction outside FETCH/MEM/IRQ)
     logic [W-1:0] mem_addr_m;
     always_comb begin
         bus_re   = (state == S_FETCH) || (state == S_MEM && d.mem_re);
-        bus_we   = (state == S_MEM) && d.mem_we && !d.iret;
-        bus_sz   = (state == S_FETCH) ? SZ_WORD : d.mem_sz;
-        bus_addr = (state == S_FETCH) ? pc
-                 : (state == S_MEM) ? mem_addr_m
-                 : pc;
-        bus_wdata = (d.call) ? seq_pc
-                  : (d.stack_op ? rdata_a : rdata_b);
+        bus_we   = ((state == S_MEM) && d.mem_we && !d.iret)
+                 || (state == S_IRQ_PC) || (state == S_IRQ_FL);
+        bus_sz   = (state == S_FETCH || state == S_IRQ_PC || state == S_IRQ_FL)
+                 ? SZ_WORD
+                 : d.mem_sz;
+        if (state == S_FETCH)
+            bus_addr = pc;
+        else if (state == S_IRQ_PC || state == S_IRQ_FL)
+            bus_addr = sp - 32'd4;               // push below SP
+        else if (state == S_MEM)
+            bus_addr = mem_addr_m;
+        else
+            bus_addr = pc;
+        if (state == S_IRQ_PC)
+            bus_wdata = pc;                      // push interrupted PC
+        else if (state == S_IRQ_FL)
+            bus_wdata = {27'b0, fl};             // push FLAGS (pre-clear I)
+        else if (d.call)
+            bus_wdata = seq_pc;
+        else
+            bus_wdata = d.stack_op ? rdata_a : rdata_b;
     end
 
     always_comb begin
@@ -232,6 +254,7 @@ module cpu import deckcpu_pkg::*; #(
             rd_f       <= '0;
             rd_p       <= '0;
             mem_phase  <= 1'b0;
+            irq_vec_l  <= 3'd0;
             done       <= 1'b0;
             halted     <= 1'b0;
             for (int i = 0; i < NREG; i++)
@@ -243,7 +266,12 @@ module cpu import deckcpu_pkg::*; #(
             case (state)
                 S_FETCH: begin
                     mem_phase <= 1'b0;
-                    if (bus_err) begin
+                    if (irq_en && irq_req) begin
+                        // instruction-boundary interrupt: latch the slot and
+                        // enter the two-cycle push sequence (no fetch posted)
+                        irq_vec_l <= irq_vec;
+                        state     <= S_IRQ_PC;
+                    end else if (bus_err) begin
                         halted <= 1'b1;
                         state  <= S_WB;
                     end else begin
@@ -348,6 +376,21 @@ module cpu import deckcpu_pkg::*; #(
                         dbg_rf[d.rd] <= wb_data;
                     done  <= 1'b1;
                     state <= S_FETCH;
+                end
+                S_IRQ_PC: begin
+                    // bus writes [SP] = PC (the pre-fetch return address)
+                    sp    <= sp - 32'd4;
+                    state <= S_IRQ_FL;
+                end
+                S_IRQ_FL: begin
+                    // bus writes [SP] = FLAGS below the PC above; the pushed
+                    // word keeps the pre-entry I bit, the live register is
+                    // cleared. PC then jumps to the slot's vector entry.
+                    sp         <= sp - 32'd4;
+                    fl[FLAG_I] <= 1'b0;
+                    pc         <= IVT_BASE + {{(W-5){1'b0}}, irq_vec_l, 2'b00};
+                    done       <= 1'b1;
+                    state      <= S_FETCH;
                 end
                 default: ;
             endcase

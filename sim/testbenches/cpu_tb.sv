@@ -213,7 +213,7 @@ module cpu_tb
             check(232, exp_idx, 32);
             if (!(seen_f && seen_d && seen_e && seen_m && seen_w)) begin
                 fail = fail + 1;
-                $display("FAIL[state walk missing phases: f=%0d d=%0d e=%0d m=%0d w=%0d]",
+                $display("FAIL[state walk missing stages: f=%0d d=%0d e=%0d m=%0d w=%0d]",
                          seen_f, seen_d, seen_e, seen_m, seen_w);
             end
 

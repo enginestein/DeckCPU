@@ -1,8 +1,8 @@
 // DeckCPU instruction decoder (combinational).
 //
-// Phase 2. Maps a raw instruction word onto a decoded_instr_t control word.
+// Maps a raw instruction word onto a decoded_instr_t control word.
 // Field extraction follows the R/I/B formats from isa/isa.json; the control
-// bits encode everything the Phase 3 datapath/FSM needs for this opcode.
+// bits encode everything the datapath/FSM needs for this opcode.
 //
 // Reserved fields (funct, spare) are ignored by the decoder; the assembler is
 // responsible for canonical (zero) encodings.

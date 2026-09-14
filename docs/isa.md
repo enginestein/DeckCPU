@@ -1,6 +1,6 @@
 # DeckCPU ISA Reference
 
-**Status:** Phase 1 - design spec, nothing implemented yet
+**Status:** implemented — verified by make test
 
 **This document is generated from `isa/isa.json`. Do not edit directly.**
 
@@ -144,7 +144,7 @@ Field ordering is MSB-first; the whole word is little-endian in memory.
 * Branch offsets are byte offsets; they must be a multiple of 4 and are added to `PC` of the branch instruction.
 * Opcode `0x00` is `NOP` (all-zeros word).
 
-* **NOP:** All-zeros word. Decoder treats opcode 0x00 as NOP regardless of other bits in Phase 1.
+* **NOP:** All-zeros word. The decoder treats opcode 0x00 as NOP regardless of the other bits.
 * **ADD:** two's-complement add
 * **SUB:** C = borrow (0 when result >= 0 unsigned), sets overflow
 * **MUL:** low 32 bits of product; C,V cleared

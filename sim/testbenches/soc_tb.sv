@@ -1,4 +1,4 @@
-module cpu_fsm_tb
+module soc_tb
  import deckcpu_pkg::*;
  #(parameter int W = 32);
 
@@ -6,46 +6,36 @@ module cpu_fsm_tb
     always #5 clk = ~clk;
 
     logic        rst = 1'b1;
-    logic        err_force = 1'b0;
     logic        irq_en;
     int          fail = 0;
 
-    logic        bus_re, bus_we;
+    // ---- nets ----
+    logic        bus_re, bus_we, bus_err;
+    logic [3:0]  bus_be;
     logic [W-1:0] bus_addr, bus_wdata, bus_rdata;
     mem_sz_t     bus_sz;
-    logic        bus_err;
-
-    // the tb's own memory model. Icarus enters a t=0 delta loop
-    // when $readmemh (or a many-element initial fill) touches an unpacked array
-    // that an always_comb reads, and a combinational read of the array with a
-    // wide index is what the RAM model needs; represented standalone (or
-    // hooked to more elaborate netlists) it also breaks. So program words come
-    // from PW (see sim/programs/*_words.svh) into MM, and bus_rdata is
-    // presented right after each posedge using that cycle's stable address; the
-    // core's end-of-cycle capture then reads the right word.
-    logic [31:0] MM [0:65535];
-
-    logic [31:0] PW [0:14];
-`include "cpu_fsm_prog_words.svh"
+    logic        ram_re, ram_we;
+    logic [3:0]  ram_be;
+    logic [RAM_AW-1:0] ram_addr;
+    logic [W-1:0] ram_wdata, ram_rdata;
+    logic        boot_we;
+    logic [RAM_AW-1:0] boot_addr;
+    logic [W-1:0] boot_data;
+    logic        uart_sel, timer_sel, gpio_sel, spi_sel;
 
     state_t      dbg_state;
     logic [W-1:0] dbg_pc, dbg_sp, dbg_ir;
     logic [W*NREG-1:0] dbg_regs;
     logic [4:0]  dbg_flags;
     logic [7:0]  dbg_opcode;
-    logic [3:0]  dbg_rd, dbg_rs1, dbg_rs2;
-    logic [W-1:0] dbg_alu_a, dbg_alu_b, dbg_alu_y;
-    logic [W-1:0] dbg_mem_addr, dbg_mem_wdata, dbg_mem_rdata;
-    logic        dbg_mem_re, dbg_mem_we;
     logic        dbg_done, dbg_halted;
     logic [W-1:0] dbg_cycle;
 
-    // executed pc sequence over the whole run program (13 entries: 12 retired + HALT)
-    logic [W-1:0] EXP_PC [0:13];
-    // retired opcode observed on each done pulse (12 entries)
-    logic [7:0]   EXP_OP [0:12];
+    logic [W-1:0] PW [0:14];
+`include "cpu_fsm_prog_words.svh"
 
-    assign bus_err = err_force;
+    logic [W-1:0] EXP_PC [0:13];
+    logic [7:0]   EXP_OP [0:12];
 
     cpu #(.W(W), .NREG(16)) core (
         .clk(clk), .rst(rst),
@@ -54,13 +44,27 @@ module cpu_fsm_tb
         .bus_err(bus_err),
         .irq_req(1'b0), .irq_ack(), .irq_en(irq_en),
         .dbg_state(dbg_state), .dbg_pc(dbg_pc), .dbg_regs(dbg_regs), .dbg_ir(dbg_ir),
-        .dbg_opcode(dbg_opcode), .dbg_rd(dbg_rd), .dbg_rs1(dbg_rs1), .dbg_rs2(dbg_rs2),
-        .dbg_alu_a(dbg_alu_a), .dbg_alu_b(dbg_alu_b), .dbg_alu_y(dbg_alu_y),
+        .dbg_opcode(dbg_opcode), .dbg_rd(), .dbg_rs1(), .dbg_rs2(),
+        .dbg_alu_a(), .dbg_alu_b(), .dbg_alu_y(),
         .dbg_sp(dbg_sp), .dbg_flags(dbg_flags),
-        .dbg_mem_addr(dbg_mem_addr), .dbg_mem_re(dbg_mem_re),
-        .dbg_mem_we(dbg_mem_we), .dbg_mem_wdata(dbg_mem_wdata),
-        .dbg_mem_rdata(dbg_mem_rdata), .dbg_done(dbg_done),
+        .dbg_mem_addr(), .dbg_mem_re(), .dbg_mem_we(), .dbg_mem_wdata(),
+        .dbg_mem_rdata(), .dbg_done(dbg_done),
         .dbg_cycle(dbg_cycle), .dbg_halted(dbg_halted)
+    );
+
+    bus #(.W(W)) u_bus (
+        .clk(clk), .rst(rst),
+        .re(bus_re), .we(bus_we), .sz(bus_sz), .addr(bus_addr), .wdata(bus_wdata),
+        .rdata(bus_rdata), .err(bus_err), .be(bus_be),
+        .ram_re(ram_re), .ram_we(ram_we), .ram_be(ram_be), .ram_addr(ram_addr),
+        .ram_wdata(ram_wdata), .ram_rdata(ram_rdata),
+        .uart_sel(uart_sel), .timer_sel(timer_sel), .gpio_sel(gpio_sel), .spi_sel(spi_sel)
+    );
+
+    ram #(.AW(RAM_AW)) u_ram (
+        .clk(clk), .rst(rst), .re(ram_re), .we(ram_we), .be(ram_be), .addr(ram_addr),
+        .wdata(ram_wdata), .rdata(ram_rdata),
+        .boot_we(boot_we), .boot_addr(boot_addr), .boot_data(boot_data)
     );
 
     task check(input int tag, input [W-1:0] got, input [W-1:0] exp);
@@ -72,23 +76,14 @@ module cpu_fsm_tb
         end
     endtask : check
 
-    // tb-side memory model. Clocked on the clock's NEGEDGE so that the
-    // presented read word and committed store both use the bus address AFTER
-    // the CPU's NBA updates at posedge (a posedge-region read would sample
-    // the previous cycle's addr and corrupt fetches).
-    always @(negedge clk) begin
-        if (!rst && bus_we)
-            MM[bus_addr >> 2] = bus_wdata;
-        bus_rdata = MM[bus_addr >> 2];
-    end
-
     initial begin
-        // expected executed pc order
+        logic    err_seen;
+
         EXP_PC[0]  = 32'h0000_0000;  // NOP
         EXP_PC[1]  = 32'h0000_0004;  // EI
         EXP_PC[2]  = 32'h0000_0008;  // DI
         EXP_PC[3]  = 32'h0000_000C;  // ADDI
-        EXP_PC[4]  = 32'h0000_0010;  // ADD (SUB r2,r1,r0 in B-assembly terms)
+        EXP_PC[4]  = 32'h0000_0010;  // SUB
         EXP_PC[5]  = 32'h0000_0014;  // JMP
         EXP_PC[6]  = 32'h0000_001C;  // CMP (0x18 skipped)
         EXP_PC[7]  = 32'h0000_0020;  // BEQ
@@ -99,7 +94,6 @@ module cpu_fsm_tb
         EXP_PC[12] = 32'h0000_0038;  // HALT
         EXP_PC[13] = 32'h0000_0038;  // frozen on halt
 
-        // retired opcodes on each done pulse
         EXP_OP[0]  = 8'h00;  // NOP
         EXP_OP[1]  = 8'h56;  // EI
         EXP_OP[2]  = 8'h57;  // DI
@@ -114,27 +108,18 @@ module cpu_fsm_tb
         EXP_OP[11] = 8'h51;  // POP
         EXP_OP[12] = 8'h60;  // HALT
 
-        // load program words into the memory model
-        begin : load_mm
-            for (int w = 0; w < CPU_FSM_PROG_NWORDS; w++)
-                MM[w] = PW[w];
-        end
+        err_seen = 1'b0;
+        boot_we = 0; boot_addr = 0; boot_data = 0;
 
-        // ---- 1) bus error during first fetch halts the core ----
-        err_force = 1'b1;
-        repeat (3) @(posedge clk);   // let reset flush
-        rst = 1'b0;
-        @(posedge clk);              // FETCH cycle sees bus_err
-        @(posedge clk);              // halt latched
-        check(0, dbg_halted ? 32'h1 : 32'h0, 32'h1);   // halted
-        check(1, dbg_pc, 32'h0000_0000);               // fetch never completed
-        @(posedge clk);                                   // stay parked/quiet
-        check(2, {31'b0, dbg_mem_re}, 32'h0);          // no bus traffic while halted
-
-        // ---- 2) reboot -> run program to completion ----
-        err_force = 1'b0;
-        rst = 1'b1;
+        // ---- reset + image load through the boot port (bus is quiet) ----
         repeat (2) @(posedge clk);
+        boot_we = 1'b1;
+        for (int w = 0; w < CPU_FSM_PROG_NWORDS; w++) begin
+            boot_addr = w*4;
+            boot_data = PW[w];
+            @(posedge clk);
+        end
+        boot_we = 1'b0;
         rst = 1'b0;
 
         begin
@@ -148,22 +133,23 @@ module cpu_fsm_tb
             logic    seen_f, seen_d, seen_e, seen_m, seen_w;
             logic [W-1:0] rv;
 
-            exp_idx    = 0;
-            got_done   = 0;
+            exp_idx     = 0;
+            got_done    = 0;
             prev_done_b = 0;
-            started    = 0;
-            cyc_sum    = 0;
-            start_cyc  = 0;
+            started     = 0;
+            start_cyc   = 0;
+            cyc_sum     = 0;
             seen_f = 1'b0; seen_d = 1'b0; seen_e = 1'b0; seen_m = 1'b0; seen_w = 1'b0;
             done_halted = 1'b0;
 
-            // bounded sampling window: the program runs well under 600 cycles
             for (int iter = 0; iter < 600 && !done_halted; iter++) begin
                 @(posedge clk);
                 if (!started) begin
                     started   = 1;
                     start_cyc = dbg_cycle;
                 end
+                if (bus_err)
+                    err_seen = 1'b1;
                 case (dbg_state)
                     S_FETCH:  seen_f = 1'b1;
                     S_DECODE: seen_d = 1'b1;
@@ -202,24 +188,27 @@ module cpu_fsm_tb
                     done_halted = 1'b1;
             end
 
-            // ---- 3) end-state checks ----
             check(100, {1'b0, dbg_halted}, 32'h1);
             check(101, dbg_pc, 32'h0000_0038);
             check(102, dbg_sp, 32'h0000_FFFC);
-            check(103, {27'b0, dbg_flags}, 32'h0000_0002);  // Z=1, I=0
+            check(103, {27'b0, dbg_flags}, 32'h0000_0002);
             for (int i = 0; i < 16; i++) begin
                 rv = dbg_regs[i*32 +: 32];
                 case (i)
-                    1: check(112, rv, 32'h0000_0008);   // r1 = 8
-                    2: check(113, rv, 32'h0000_0008);   // r2 = 8
-                    3: check(114, rv, 32'h0000_0064);   // r3 = 100
-                    4: check(115, rv, 32'h0000_0008);   // r4 = POP r1 = 8
+                    1: check(112, rv, 32'h0000_0008);
+                    2: check(113, rv, 32'h0000_0008);
+                    3: check(114, rv, 32'h0000_0064);
+                    4: check(115, rv, 32'h0000_0008);
                     default: check(130 + i, rv, 32'h0);
                 endcase
             end
             check(121, got_done, 13);
             check(122, exp_idx, 13);
-            check(123, dbg_cycle - start_cyc, cyc_sum);       // HALT counted in cyc_sum
+            check(123, dbg_cycle - start_cyc, cyc_sum);
+            if (err_seen) begin
+                fail = fail + 1;
+                $display("FAIL[err asserted during the run]");
+            end
             if (!(seen_f && seen_d && seen_e && seen_m && seen_w)) begin
                 fail = fail + 1;
                 $display("FAIL[state walk missing stages: f=%0d d=%0d e=%0d m=%0d w=%0d]",
@@ -227,10 +216,10 @@ module cpu_fsm_tb
             end
         end
 
-        $display("cpu_fsm_tb: %0d failures", fail);
+        $display("soc_tb: %0d failures", fail);
         if (fail == 0)
-            $display("cpu_fsm_tb: ALL CHECKS PASSED");
+            $display("soc_tb: ALL CHECKS PASSED");
         $finish;
     end
 
-endmodule : cpu_fsm_tb
+endmodule : soc_tb

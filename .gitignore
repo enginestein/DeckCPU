@@ -16,3 +16,7 @@ __pycache__/
 # Editor / OS
 *.swp
 .DS_Store
+./docs/architecture.md
+./docs/bus.md
+./docs/deckos-port.md
+./docs/verification.md

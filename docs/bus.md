@@ -1,12 +1,15 @@
 # DeckCPU Bus
 
-> **Status: Phase 1 (design spec).** The bus does not exist yet; this
-> document is the contract the RAM and peripheral modules will implement.
+> **Status: implemented.** `rtl/bus/bus.sv` implements this
+> contract; `bus_tb.sv` verifies decode, byte enables, fault behaviour, a
+> store/read transaction through to `rtl/memory/ram.sv`, and real MMIO
+> traffic through all four peripheral windows (UART, TIMER, GPIO, SPI).
 
 ## Overview
 
 Single-master, synchronous, no wait states. The CPU is the only master; all
-window decodes are combinational. Sub-word accesses use byte-enable strobes.
+window decodes are combinational over the registered master address. Sub-word
+accesses use byte-enable strobes.
 
 ## Signalling
 
@@ -20,7 +23,7 @@ window decodes are combinational. Sub-word accesses use byte-enable strobes.
 | `re` | out | 1 | read strobe |
 | `err` | in | 1 | bus error (unmapped / forbidden) |
 
-All signals are sampled/asserted for one cycle during the `MEM` phase of the
+All signals are sampled/asserted for one cycle during the `MEM` stage of the
 control FSM. Peripherals and RAM return `rdata` combinationally on `re`.
 
 Byte enable diamonds:
@@ -29,12 +32,12 @@ Byte enable diamonds:
 - halfword access: `be = 4'b0011` or `4'b1100`, `addr[0] == 0`
 - byte access: exactly one `be` bit set
 
-Misaligned accesses are treated as follows (planned): loads keep their
+Misaligned accesses are treated as follows (implemented): loads keep their
 byte-enable semantics (no fault, documented extension); stores are
-byte-enable-masked. The initial CPU only ever issues naturally-aligned
-accesses because the ISA's `LD/ST` address field is a register+offset and the
-assembler enforces alignment. A **fault policy** (trap vs `HALT`) is a
-Phase-4 TODO.
+byte-enable-masked. The CPU only ever issues naturally-aligned accesses
+because the ISA's `LD/ST` address field is a register+offset and the
+assembler enforces alignment. A bus error (unmapped address) drives the
+control FSM straight to `HALT` (verified by `cpu_fsm_tb`).
 
 ## Decode
 
@@ -49,6 +52,7 @@ Phase-4 TODO.
 
 ## Error handling
 
-An unmapped address asserts `err=1` and returns zero read data. The CPU (Phase
-4 TODO) will latch this and either trap to the IVT or halt. For Phase 1 the
-error is merely observable on `dbg.bus_err`.
+An address outside every window faults: `err=1`, zero read data, and the CPU
+FSM enters `HALT`. A **mapped but unmapped** MMIO window (peripheral with no
+handler) is *not* a fault — it decodes a defined slave and returns `err=0`,
+`rdata=0`.

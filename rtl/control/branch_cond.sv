@@ -1,6 +1,6 @@
 // DeckCPU branch condition evaluation (combinational).
 //
-// Phase 2. Decides whether a B-format conditional branch is taken based on
+// Decides whether a B-format conditional branch is taken based on
 // the flags produced by an ALU subtraction (rs1 - rs2). The `en` input
 // selects the condition group for Bcc instructions.
 //
