@@ -1,6 +1,6 @@
 # DeckCPU ISA Reference
 
-**Status:** implemented — verified by make test
+**Status:** implemented verified by make test
 
 **This document is generated from `isa/isa.json`. Do not edit directly.**
 
@@ -52,7 +52,7 @@
 
 ## Instruction encoding formats
 
-### R — 3-register ALU / register move
+### R 3-register ALU / register move
 
 | Field | Bits | Width |
 |---|---|---|
@@ -63,7 +63,7 @@
 | `funct` | bits 11:8 | 4 |
 | `spare` | bits 7:0 | 8 |
 
-### I — immediate / load-store with offset
+### I immediate / load-store with offset
 
 | Field | Bits | Width |
 |---|---|---|
@@ -72,7 +72,7 @@
 | `rs1` | bits 19:16 | 4 |
 | `imm16` | bits 15:0 | 16 |
 
-### B — branch / jump
+### B branch / jump
 
 | Field | Bits | Width |
 |---|---|---|

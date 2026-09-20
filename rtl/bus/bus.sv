@@ -1,24 +1,11 @@
-// DeckCPU synchronous bus — single master, combinational window decode.
-//
-// Implements the bus contract: the CPU (the only
-// master) drives re/we/sz/addr/wdata; the bus derives byte-enable strobes
-// and returns rdata/err. All window decodes are combinational over the
-// registered master address, so the netlist settles once per cycle (no
-// Icarus delta loops).
-//
-// Slaves:
-//   - RAM: 0x0000_0000 - 0x0000_FFFF   (rtl/memory/ram.sv)
-//   - UART:0x4000_0000 - 0x4000_0FFF   (rtl/peripherals/uart.sv)
-//   - TIMER:0x4000_1000 - 0x4000_1FFF  (rtl/peripherals/timer.sv)
-//   - GPIO:0x4000_2000 - 0x4000_2FFF   (rtl/peripherals/gpio.sv)
-//   - SPI: 0x4000_3000 - 0x4000_3FFF   (rtl/peripherals/spi.sv)
+// single master bus
+// slaves:
+//   - RAM: 0x0000_0000 - 0x0000_FFFF   ram.sv
+//   - UART:0x4000_0000 - 0x4000_0FFF   uart.sv
+//   - TIMER:0x4000_1000 - 0x4000_1FFF  timer.sv
+//   - GPIO:0x4000_2000 - 0x4000_2FFF   gpio.sv
+//   - SPI: 0x4000_3000 - 0x4000_3FFF   spi.sv
 // anything else: err=1, rdata=0.
-//
-// Strobe policy: only the selected slave receives re/we, and its address is
-// clamped to the slave's own width, so a slave never indexes out of range
-// while unselected. Peripheral IRQ lines pass straight through the bus to
-// the priority arbiter (`irq_prio`). A mapped MMIO window always returns err=0; only an
-// address outside every window faults and halts the CPU.
 
 module bus import deckcpu_pkg::*; #(
     parameter int W = 32

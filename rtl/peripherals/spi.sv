@@ -1,21 +1,16 @@
-// DeckCPU SPI — MMIO serial master/slave model (docs/memory-map.md).
+// DeckCPU SPI MMIO serial master/slave model (docs/memory-map.md).
 //
-// Register map (offsets within the 4 KiB window at 0x4000_3000):
 //   +0x00 CTRL (RW) bit0 ENABLE, bit1 MODE (0=master, 1=slave)
-//   +0x04 BAUD (RW) SCK divisor (model: bit-time in clocks)
+//   +0x04 BAUD (RW) SCK divisor (bit-time in clocks)
 //   +0x08 TX   (WO) write = start a transfer
 //   +0x0C RX   (RO) shifted-in byte (public MISO data)
 //   +0x10 STS  (RO) bit0 BUSY
 //
-// Model: a write to TX (while ENABLE, idle) presents the byte on the
-// spi_out (MOSI) port, raises BUSY for one bit-time per div (8*BAUD clocks;
-// a fast default of 8 clocks when BAUD=0), then latches the byte presented
-// on spi_in (MISO) into RX and raises the transfer-complete interrupt.
-// Reading RX clears that interrupt. MODE is stored for future virtual
-// peripherals; the register-level model transfers identically in both modes.
-//
-// MMIO stores honour the bus byte-enable lanes; unlisted offsets read 0 and
-// ignore writes.
+// A TX write (while ENABLE, idle) drives the byte out on spi_out, holds BUSY
+// for 8*BAUD clocks (8 when BAUD=0), latches spi_in into RX and raises the
+// transfer-complete interrupt; reading RX clears it. MODE is stored only —
+// the register model shifts identically in both modes. Stores honour byte
+// enables; unlisted offsets read 0.
 
 module spi #(
     parameter int W = 32

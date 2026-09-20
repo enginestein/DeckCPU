@@ -1,7 +1,5 @@
 # DeckOS backend for DeckCPU
 
-A subset of the DeckOS console onto DeckCPU, running on the simulated processor in `sim/testbenches/deckos_tb.sv`
-
 ## Console commands
 
 ```
@@ -15,7 +13,7 @@ poke <addr> <val>    writes the 32-bit <val> to <addr> (echoes <val>)
 calc <a> <op> <b>    integer ALU expression; ops + - * & | ^ (result in hex)
 sleep <ticks>        busy-waits <ticks> TIMER COUNT deltas, prints "slept 0x<delta>"
 exec <addr>          CALLs the 4-byte-aligned code word at <addr>
-                     (the target's RET returns to the shell) — the shell
+                     (the target's RET returns to the shell) the shell
                      can run code poked into RAM, i.e. a stored program demo
 exit                 HALT the simulated CPU and stop the simulation
 ```
@@ -29,5 +27,12 @@ make build/sim/deckos     # compile the deterministic netlist testbench
 make run-deckos-tb        # run it (vvp) -> deckos_tb: PASS
 make run-deckos           # interactive console (above)
 make term-check           # scripted UART round-trip -> deckos_term: PASS
-make test                 # full suite: isa, docs, lint, sim, asm check, term
+make build/sim/deckos_c   # compile the deckc CIOS testbench
+make run-deckos_c         # run it -> deckos_c_tb: PASS
+make build/sim/cshell     # compile the deckc console testbench
+make run-cshell           # run it -> cshell_tb: PASS
+make run-cshell-term      # interactive deckc console terminal
+make term-check-cshell    # scripted UART round-trip -> cshell_term: PASS
+make deckc-check          # golden artefact + interpreter transcript pytest
+make test                 # full suite: isa, docs, lint, sim, asm/deckc check, term
 ```

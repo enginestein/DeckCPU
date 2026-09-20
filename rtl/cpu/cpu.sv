@@ -1,32 +1,17 @@
 // DeckCPU core: datapath + control FSM.
 //
-// Multi-cycle, non-pipelined, deterministic. The FSM walks
-// FETCH -> DECODE -> EXECUTE -> MEM -> WRITEBACK, skipping states per
-// instruction class (ISA-mandated cycle counts in isa/isa.json):
+// Multi-cycle, non-pipelined. The FSM walks FETCH->DECODE->EXEC->MEM->WB,
+// skipping states per instruction class (cycle counts pinned in isa/isa.json):
+//   3:  NOP/EI/DI/HALT
+//   4:  ALU reg+imm, MOV/LI/LIH/RDSP/WRSP/RDFLAG/WRFLAG, branches, ST, PUSH, CALL
+//   5:  loads, POP, RET
+//   6:  IRET (two sequential pops on the single bus)
 //
-//   no-op / EI / DI / HALT     3  (FETCH, DECODE, EXEC)
-//   ALU reg + immediate,       4  (FETCH, DECODE, EXEC, WB)
-//     MOV/LI/LIH/RDSP/WRSP/RDFLAG/WRFLAG
-//   branches/jumps, ST, PUSH,  4  (FETCH, DECODE, EXEC, MEM)
-//     CALL (store+link)
-//   loads, POP, RET            5  (FETCH, DECODE, EXEC, MEM, WB)
-//   IRET                       6  (FETCH, DECODE, EXEC, MEM, MEM, WB —
-//                                  two sequential word pops over single bus)
-//
-// Memory interface: a synchronous bus matched by rtl/bus and rtl/memory. Reads
-// are issued during the FETCH/MEM cycle and the sampled data is latched at
-// the clock edge that ends that cycle (read data must track the address
-// during the cycle). Writes are combinational address/data + we strobe.
-//
-// Interrupts: EI/DI control FLAGS.I (irq_en). At every instruction
-// boundary (the S_FETCH cycle) the core checks `irq_en && irq_req`; if both
-// hold it enters via two dedicated push states: PC is pushed at [SP-4], then
-// FLAGS is pushed at [SP-8] and FLAGS.I is cleared, then PC <- IVT_BASE +
-// 4*irq_vec. The pushed FLAGS keeps the pre-entry I bit (like MSP430 pushing
-// SR), so IRET restores it; a level source must be cleared by the handler.
-// `irq_vec[2:0]` is the slot (1..7) selected by the priority arbiter (`irq_prio`).
-// `irq_ack` pulses for one cycle during the first push. IRET already pops
-// FLAGS then PC. A bus read error halts the core like HALT.
+// EI/DI drive FLAGS.I. On irq_en && irq_req at the S_FETCH boundary the core
+// pushes PC then FLAGS (clearing I) and jumps to IVT_BASE + 4*irq_vec; the
+// stack keeps the pre-entry I bit so IRET restores it, and a level source must
+// be cleared by the handler. irq_ack pulses during the first push. A bus read
+// error halts the core like HALT.
 
 module cpu import deckcpu_pkg::*; #(
     parameter int W    = 32,

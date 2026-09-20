@@ -1,16 +1,10 @@
 // DeckCPU interrupt arbiter.
 //
-// Combines the five peripheral level-asserted IRQ lines into the single
-// `irq_req` the CPU polls at instruction boundaries plus the IVT slot of the
-// highest-priority source. Priority is by slot index (docs/isa.md): lower
-// index = higher priority, so TIMER (slot 1) > UART_RX (2) > UART_TX (3) >
-// GPIO (4) > SPI (5). Slot 0 is the reset entry and is never dispatched.
-//
-// Per-source masking and status logic are planned for the PIC
-// (rtl/peripherals), which will take over this role.
-//
-// The mux is a plain combinational priority chain (no state), so Icarus has
-// nothing to delta-loop on and it is synthesizable.
+// ORs the five peripheral IRQ lines into `irq_req` and picks the IVT slot of
+// the highest-priority source. Priority is slot index: lower = higher, so
+// TIMER(1) > UART_RX(2) > UART_TX(3) > GPIO(4) > SPI(5). Slot 0 is the reset
+// entry and is never dispatched. A plain combinational priority chain, so no
+// state for Icarus to loop on. Per-source masking may move to a PIC later.
 
 module irq_prio (
     input  logic       irq_timer,     // slot 1 (highest priority)

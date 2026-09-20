@@ -1,22 +1,15 @@
-// DeckCPU UART — MMIO register block (docs/memory-map.md).
+// DeckCPU UART MMIO block (docs/memory-map.md).
 //
-// Register map (offsets within the 4 KiB window at 0x4000_0000):
-//   +0x00 TXD  (WO)  transmit byte            (reads return 0)
-//   +0x04 RXD  (RO)  received byte            (read clears RX_READY)
+//   +0x00 TXD  (WO)  transmit byte (reads return 0)
+//   +0x04 RXD  (RO)  received byte (read clears RX_READY)
 //   +0x08 STS  (RO)  bit0 TX_BUSY, bit1 RX_READY, bit2 TX_READY
 //   +0x0C CTRL (RW)  bit0 TX_EN,    bit1 RX_EN
-//   +0x10 BAUD (RW)  baud divisor for the *model* (host console speed fixed)
+//   +0x10 BAUD (RW)  baud divisor for the sim *model* (host console speed fixed)
 //
-// Host console model: the byte is handed to the host sink as a one-cycle
-// tx_valid pulse on tx_char (the "terminal sink"); the
-// RTL stays synthesizable, the host prints it. The terminal source feeds
-// rx_push/rx_byte (the "terminal source"); a read of RXD returns the byte
-// and clears RX_READY. Interrupts are level outputs: RX on
-// byte-available + RX_EN, TX on idle + TX_EN.
-//
-// MMIO stores honour the bus byte-enable lanes, so ST.B/ST.H touch only the
-// covered bytes of a register word, exactly like the RAM lane model.
-// Unlisted offsets read 0 and ignore writes.
+// The host treats it as a terminal: bytes come out as a one-cycle tx_valid
+// pulse on tx_char, and feed back in via rx_push/rx_byte. IRQ lines are level,
+// gated on the EN bits. Stores honour the bus byte enables; unlisted offsets
+// read 0.
 
 module uart #(
     parameter int W = 32

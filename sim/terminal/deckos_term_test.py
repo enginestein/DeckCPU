@@ -1,22 +1,10 @@
 #!/usr/bin/env python3
-"""Deterministic scripted DeckOS terminal round-trip test (CI-safe).
+"""Scripted DeckOS terminal round-trip test (CI-safe).
 
-Boots the same interactive DeckOS netlist binary the human terminal uses
-(build/sim/deckos_term + sim/terminal/deckcpu_terminal.py share this path),
-types a fixed session through the same UART RX FIFO, and asserts the console's
-real responses came back through UART TX. Nothing here emulates DeckOS: the
-DeckCPU executes the image and produces every asserted byte.
-
-Session typed at the machine:
-    help
-    about
-    echo hello world
-    time
-    calc 6 * 7
-    calc 2 + 3
-    poke f100 cafebeef
-    peek f100
-    exit            <- shell HALTs; the simulator must stop by itself
+Boots the same netlist binary `make run-deckos` uses, types a fixed session
+into the UART RX FIFO, and checks the shell's real responses came back over
+UART TX. Nothing here emulates DeckOS — the CPU runs the image. The session
+ends with `exit`, which HALTs the shell so the simulator must stop by itself.
 
 Usage: deckos_term_test.py [path-to-vvp-binary]
 Exit:  0 = pass, 1 = fail.

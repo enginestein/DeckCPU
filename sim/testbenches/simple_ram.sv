@@ -1,12 +1,9 @@
-// Byte-addressed RAM model, the behaviour intended for the bus module and rtl/memory/ram.sv.
+// Reference byte-addressed RAM behaviour (what rtl/memory/ram.sv implements).
 //
-// NOT used by the core cpu testbenches: Icarus 11 delta-loops at t=0 when a
-// wide-index combinational read of an unpacked array is combined with
-// $readmemh or a large initial fill over it, and even the plain comb read
-// breaks once wired into a fan-in netlist (verified with isolated stubs). The
-// cpu_fsm_tb/cpu_tb therefore emulate memory from the testbench (MM model, no
-// array comb-read). This file documents the target RAM behaviour
-// and can be reused once reads are registered and indexing is constrained.
+// The cpu testbenches don't use this directly: Icarus 11 delta-loops at t=0
+// on a wide combinational read of an unpacked array, so they model memory
+// from the testbench instead. Kept as documentation of the intended
+// semantics, usable once reads are registered and indexing constrained.
 
 module simple_ram import deckcpu_pkg::*; #(
     parameter int AW      = 16

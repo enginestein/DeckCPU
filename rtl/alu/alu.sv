@@ -1,3 +1,5 @@
+// no hardcore alu
+
 module alu import deckcpu_pkg::*; #(
     parameter int W = 32
 )(

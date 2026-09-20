@@ -1,4 +1,4 @@
-; irq_tb golden program — verifies against sim/programs/irq_tb_prog.hex
+; irq_tb golden program verifies against sim/programs/irq_tb_prog.hex
 ;
 ; IVT slots 0..5; main arms FLAGS.I (DI/EI window used by irq_tb's gating
 ; test) then spins; handlers H1..H5 store their slot id at [0x1000 + 4*(k-1)]

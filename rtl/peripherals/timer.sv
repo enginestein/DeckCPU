@@ -1,23 +1,16 @@
-// DeckCPU TIMER — MMIO compare timer (docs/memory-map.md).
+// DeckCPU TIMER MMIO compare timer (docs/memory-map.md).
 //
-// Register map (offsets within the 4 KiB window at 0x4000_1000):
-//   +0x00 CTRL     (RW) bit0 ENABLE, bit1 IRQ_EN, bit2 REPEAT (0=one-shot,1=periodic)
-//   +0x04 PRESCALE (RW) pre-divider; COUNT ticks when it underflows
-//   +0x08 COMPARE  (RW) match value
-//   +0x0C COUNT    (RW) current count (starts at 0)
-//   +0x10 IRQ_STS  (RW) bit0 MATCH; write 1 to clear (acknowledge)
+//   +0x00 CTRL      (RW) bit0 ENABLE, bit1 IRQ_EN, bit2 REPEAT (0=one-shot, 1=periodic)
+//   +0x04 PRESCALE  (RW) pre-divider; reloaded as COUNT counts up
+//   +0x08 COMPARE   (RW) match value
+//   +0x0C COUNT     (RW) current count (starts at 0)
+//   +0x10 IRQ_STS   (RW) bit0 MATCH; write 1 to clear
 //
-// Model: while CTRL.ENABLE and not frozen, a down-counter ticks each clock;
-// at each underflow COUNT increments and the counter reloads PRESCALE
-// (PRESCALE=0 => COUNT free-runs every clock). Writing PRESCALE also re-arms
-// the running divider, so the pre-scale cadence is deterministic from the
-// write. When COUNT equals COMPARE the MATCH bit latches and irq (level)
-// asserts while IRQ_EN. In one-shot mode (REPEAT=0) counting freezes until
-// MATCH is acknowledged; in periodic mode it keeps counting and MATCH
-// re-arms. irq feeds IVT slot 1.
-//
-// MMIO stores honour the bus byte-enable lanes (ST.B/ST.H touch only the
-// covered bytes); unlisted offsets read 0 and ignore writes.
+// While ENABLE a down-counter reloads PRESCALE each clock; on underflow COUNT
+// increments (PRESCALE=0 => free-run). COUNT == COMPARE latches MATCH and irq
+// asserts while IRQ_EN (feeds slot 1). One-shot freezes until MATCH is
+// cleared; periodic keeps counting. Stores honour byte enables; unlisted
+// offsets read 0.
 
 module timer #(
     parameter int W = 32

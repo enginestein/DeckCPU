@@ -12,7 +12,7 @@
     "stack_full_descending": true,
     "reset_pc": "0x00000000",
     "reset_sp": "0x0000FFFC",
-    "status": "implemented — verified by make test"
+    "status": "implemented verified by make test"
   },
 
   "formats": {

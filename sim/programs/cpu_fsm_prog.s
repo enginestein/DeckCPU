@@ -1,4 +1,4 @@
-; cpu_fsm golden program — verifies against sim/programs/cpu_fsm_prog.hex
+; cpu_fsm golden program verifies against sim/programs/cpu_fsm_prog.hex
 ;
 ; Source-level view of tools/gen_programs.py cpu_fsm_prog. The byte
 ; image in sim/programs is the executed byte image; this file exists so the

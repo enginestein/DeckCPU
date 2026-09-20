@@ -1,21 +1,16 @@
-// DeckCPU GPIO — 32-pin MMIO model (docs/memory-map.md).
+// DeckCPU GPIO 32-pin MMIO model (docs/memory-map.md).
 //
-// Register map (offsets within the 4 KiB window at 0x4000_2000):
 //   +0x00 DIR      (RW) bit per pin: 0=input, 1=output
 //   +0x04 OUT      (RW) output data (mirrored on the gpio_out port)
-//   +0x08 IN       (RO) input data, read directly from the gpio_in port
-//   +0x0C PULL     (RW) pull config per pin (stored for virtual peripherals)
-//   +0x10 IRQ_STS  (RW) edge-event bits; write 1 to clear (W1C)
+//   +0x08 IN       (RO) input data, read from the gpio_in port
+//   +0x0C PULL     (RW) stored for virtual peripherals
+//   +0x10 IRQ_STS  (RW) edge events; write 1 to clear
 //   +0x14 IRQ_MASK (RW) per-pin IRQ enable
 //
-// Model: any transition of a gpio_in pin (rising or falling) latches the
-// corresponding IRQ_STS bit. irq is a level while any (IRQ_STS & IRQ_MASK)
-// bit is set, feeding IVT slot 4. DIR is stored only — it gates
-// the pin direction of a real IO cell, not this register-level model.
-// gpio_out mirrors OUT for the virtual-peripheral hooks of the DeckOS port.
-//
-// MMIO stores honour the bus byte-enable lanes; unlisted offsets read 0 and
-// ignore writes.
+// Any gpio_in transition (rising or falling) latches its IRQ_STS bit; irq is
+// level while (IRQ_STS & IRQ_MASK) bites, feeding IVT slot 4. DIR is stored
+// only it gates a real IO cell's direction, not this register-level model.
+// Stores honour byte enables; unlisted offsets read 0.
 
 module gpio #(
     parameter int W = 32

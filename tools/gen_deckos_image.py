@@ -1,17 +1,10 @@
 #!/usr/bin/env python3
-"""Regenerate the DeckOS console golden images from the single source of truth.
+"""Regenerate the DeckOS console golden images from its assembly source.
 
 Reassembles deckos-port/deckcpu/console.s (which includes its HAL) with the
-the host assembler and rewrites:
-  - sim/programs/deckos_console.hex         @-addressed byte image (golden)
-  - sim/programs/deckos_console_words.svh   word include the testbench pokes
-                                            into RAM through the write port
-
-The golden test in software/assembler/test_assembler.py re-assembles
-sim/programs/deckos_console.s (a wrapper that .includes the same source) and
-requires those two files to match, so run this after ANY console.s/HAL change,
-then re-run `make test`.
-"""
+host assembler and rewrites the golden .hex + _words.svh that deckos_tb.sv
+boots. test_assembler.py re-assembles the same source and requires a match,
+so run this after any console.s/HAL change, then `make test`.
 
 import sys
 from pathlib import Path

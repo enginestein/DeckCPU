@@ -1,4 +1,4 @@
-# DeckCPU — top-level build
+# DeckCPU top-level build
 #
 # Targets:
 #   make compile   Icarus compile of all RTL + testbenches
@@ -37,10 +37,32 @@ RTL_SRCS := $(PKG_SRC) $(shell find rtl -name '*.sv' ! -path 'rtl/pkg/*' | sort)
 TB_DIR   := sim/testbenches
 PROG_DIR := sim/programs
 PROG_SVHS := $(wildcard $(PROG_DIR)/*_words.svh)
-TESTS    := pkg_smoke alu regfile decoder branch_cond cpu_fsm cpu ram bus soc uart timer gpio spi irq deckos
+TESTS    := pkg_smoke alu regfile decoder branch_cond cpu_fsm cpu ram bus soc uart timer gpio spi irq deckos deckos_c cshell
 
 # Assembler/disassembler test suite (pytest)
 ASM_TEST := software/assembler/test_assembler.py
+
+# deckc CIOS image: BSP + test main + verbatim DeckOS syslog.c -> golden
+# .hex/.svh artefacts for deckos_c_tb.sv. Regenerates on ANY change to the
+# deckc runtime/BSP/compiler inputs or the vendored DeckOS plain C sources.
+CIOS_IMG   := $(PROG_DIR)/cdecko_cios_words.svh
+CIOS_HEX   := $(PROG_DIR)/cdecko_cios.hex
+CIOS_SRCS  := $(wildcard software/deckc/bsp/* software/deckc/rt/crt0.s \
+               sim/programs/cdecko/include/syslog.h \
+               sim/programs/cdecko/kernel/syslog.c software/deckc/*.py) \
+               tools/gen_cios_image.py
+
+# deckc cshell image: BSP + string.c + the interactive console app + DeckOS
+# syslog.c -> golden .hex/.svh artefacts for cshell_tb.sv and cshell_term_tb.sv.
+# Regenerates on ANY change to the console app, deckc toolchain/runtime or the
+# vendored DeckOS C sources (same policy as CIOS).
+CSHELL_IMG   := $(PROG_DIR)/cdecko_cshell_words.svh
+CSHELL_HEX   := $(PROG_DIR)/cdecko_cshell.hex
+CSHELL_SRCS  := $(wildcard software/deckc/app/* software/deckc/bsp/* \
+                 software/deckc/rt/crt0.s \
+                 sim/programs/cdecko/include/syslog.h \
+                 sim/programs/cdecko/kernel/syslog.c software/deckc/*.py) \
+                 tools/gen_cshell_image.py
 
 # The CPU testbenches drive the DUT with sequences of @(posedge clk) timing
 # controls inside initial blocks, which Verilator 4.038 cannot schedule
@@ -56,7 +78,8 @@ SIM_BINS := $(addprefix $(SIM_DIR)/,$(TESTS))
 
 .PHONY: all compile lint sim test docs docs-check isa-check vect clean asm-check \
         $(addprefix run-,$(TESTS)) $(addprefix lint-,$(TESTS)) \
-        run-deckos run-deckos-vcd term-check
+        run-deckos run-deckos-vcd run-cshell-term run-cshell-term-vcd \
+        term-check term-check-cshell
 
 all: compile
 
@@ -132,6 +155,26 @@ term-check: $(SIM_DIR)/deckos_term
 	python3 sim/terminal/deckos_term_test.py $(SIM_DIR)/deckos_term
 	@echo "deckos_term: PASS (scripted UART round-trip)"
 
+# ---- interactive DeckC console terminal ----
+#
+# cshell_term_tb shares the deckos_term transport design (prompt "deckc> ")
+# and is deliberately NOT in TESTS (it would block forever waiting for input);
+# 'make test' covers the same binary via term-check-cshell.
+
+$(SIM_DIR)/cshell_term_vcd: $(RTL_SRCS) $(TB_DIR)/cshell_term_tb.sv $(GEN_HEADER) $(CSHELL_IMG)
+	@mkdir -p $(SIM_DIR)
+	$(SIM) $(SIMFLAGS) -DDUMPVCD -I $(GEN_DIR) -I $(TB_DIR) -I $(PROG_DIR) -o $@ $(RTL_SRCS) $(TB_DIR)/cshell_term_tb.sv
+
+run-cshell-term: $(SIM_DIR)/cshell_term
+	python3 sim/terminal/deckcpu_terminal.py $(SIM_DIR)/cshell_term
+
+run-cshell-term-vcd: $(SIM_DIR)/cshell_term_vcd
+	python3 sim/terminal/deckcpu_terminal.py $(SIM_DIR)/cshell_term_vcd
+
+term-check-cshell: $(SIM_DIR)/cshell_term
+	python3 sim/terminal/cshell_term_test.py $(SIM_DIR)/cshell_term
+	@echo "cshell_term: PASS (scripted UART round-trip)"
+
 # ---- generated docs from the single source of truth ----
 docs:
 	python3 tools/isa_tools.py docs $(ISA_JSON) docs
@@ -153,7 +196,21 @@ isa-check:
 asm-check:
 	python3 -m pytest -q $(ASM_TEST)
 
-test: isa-check docs-check lint sim asm-check term-check
+# ---- deckc CIOS golden image + interpreter/RTL regression ----
+$(CIOS_IMG) $(CIOS_HEX): $(CIOS_SRCS)
+	python3 tools/gen_cios_image.py
+
+$(CSHELL_IMG) $(CSHELL_HEX): $(CSHELL_SRCS)
+	python3 tools/gen_cshell_image.py
+
+build/sim/deckos_c: $(CIOS_IMG) $(CIOS_HEX)
+
+build/sim/cshell: $(CSHELL_IMG) $(CSHELL_HEX)
+
+deckc-check: $(CIOS_IMG) $(CSHELL_IMG)
+	python3 -m pytest -q software/deckc/test_deckc.py
+
+test: isa-check docs-check lint sim asm-check deckc-check term-check term-check-cshell
 	@echo "================ deckcpu test suite PASSED ================"
 
 clean:

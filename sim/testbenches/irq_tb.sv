@@ -1,21 +1,15 @@
 // DeckCPU interrupt integration testbench: cpu + bus + ram + irq_prio.
 //
-// Drives the five peripheral IRQ lines into the priority arbiter (the
-// witing: peripheral irq -> bus passthrough -> irq_prio -> cpu) and checks
-// the CPU's interrupt contract end to end against docs/isa.md:
+// Drives the five peripheral IRQ lines through the arbiter and checks the
+// interrupt contract against docs/isa.md: entry gated by FLAGS.I (an IRQ
+// asserted before EI is held), push PC/FLAGS and vector through the IVT,
+// irq_ack on the first push, handler markers + IRET restoring PC/SP/FLAGS
+// (so a still-asserted source re-enters), priority by slot index, and no
+// nesting while FLAGS.I==0.
 //
-//   - entry gated by FLAGS.I (EI/DI): an IRQ asserted before EI must be held;
-//   - entry: push PC at [SP-4], push FLAGS at [SP-8] (with the pre-entry I bit),
-//     clear FLAGS.I, PC <- IVT_BASE + 4*slot; irq_ack pulses on the first push;
-//   - vector dispatch through the 8-slot IVT to the right handler (slot k);
-//   - handler marker stores + IRET restores PC/SP/FLAGS (so a still-asserted
-//     source re-enters);
-//   - priority by slot index (TIMER > UART_RX > UART_TX > GPIO > SPI);
-//   - no nesting while FLAGS.I==0 in the handler.
-//
-// Program (tools/gen_programs.py -> sim/programs/irq_tb_prog_words.svh):
-//   slots 0..5 JMP to main / H1..H5; main: LI r1,0x1000 / DI / EI / spin;
-//   Hk stores k at [0x1000+4*(k-1)] then IRETs.
+// Program (tools/gen_programs.py): slots 0..5 JMP to main / H1..H5; main
+// does LI r0,0x1000 / DI / EI / spin; Hk stores k at [0x1000+4*(k-1)] then
+// IRETs.
 
 module irq_tb
  import deckcpu_pkg::*;

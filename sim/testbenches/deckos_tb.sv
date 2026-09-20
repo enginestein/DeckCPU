@@ -1,24 +1,16 @@
 // DeckOS-on-DeckCPU testbench.
 //
-// Boots the DeckOS console program (sim/programs/deckos_console_words.svh,
-// a 531-word image assembled from deckos-port/deckcpu/console.s), then acts
-// as the host terminal: it pushes bytes into the UART's host-console source
-// (rx_push/rx_byte) and captures the TX side (tx_valid/tx_char), asserting
-// on the shell's responses (help/about/echo/time/gpio plus the peek/poke/
-// calc/sleep/exec command set) and on the GPIO side effect of `gpio`.
+// Boots the 531-word DeckOS console image (sim/programs/
+// deckos_console_words.svh, from deckos-port/deckcpu/console.s), then plays
+// host terminal: pushes bytes into the UART RX and checks the shell's
+// responses (help/about/echo/time/gpio + peek/poke/calc/sleep/exec) and the
+// GPIO side effect of `gpio` the proof that the hand-assembled DeckOS HAL
+// talks to the MMIO devices on the netlist, and that poked-in code runs
+// (a stored-program machine).
 //
-// This is the RTL-level proof that the hand-assembled DeckOS HAL + polled
-// shell communicate with the DeckCPU MMIO devices (UART/TIMER/GPIO), and
-// that the shell can poke/read RAM and execute poked-in code (a stored-
-// program machine) — i.e. that the DeckCPU netlist can host the DeckOS
-// console port.
-//
-// No interrupts are involved: the console is polled (hal_console_getchar).
-//
-// The console's RX path is a single latch (a push into a still-unread slot
-// silently replaces it), and commands like `sleep` pause output for long busy
-// waits, so before pushing each line the testbench waits for the previous
-// line's fresh "DeckOS> " prompt and for the UART TX to go quiet.
+// The console is polled (no interrupts). Its RX is a single latch (a push
+// into a still-unread slot is lost) and `sleep` stalls output, so each line
+// waits for the previous fresh "DeckOS> " prompt and the TX to go quiet.
 
 module deckos_tb
  import deckcpu_pkg::*;

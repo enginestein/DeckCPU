@@ -1,4 +1,4 @@
-; cpu_tb golden program — verifies against sim/programs/cpu_tb_prog.hex
+; cpu_tb golden program verifies against sim/programs/cpu_tb_prog.hex
 ;
 ; Exercises the whole integer ALU (ADD..MUL), load/store with offsets,
 ; immediate, compare, branch (skip over the never-executed path), call/ret,

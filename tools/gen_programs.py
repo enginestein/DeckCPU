@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """Generate golden test programs + word-loader includes.
 
-Emits, for each program:
-  - sim/programs/<name>.hex          golden byte image, @-addressed (doc; reused
-                                     by the assembler tests)
-  - sim/programs/<name>_words.svh    word list that a testbench pokes into the
-                                     RAM through its write port during reset
+For each program you get:
+  - sim/programs/<name>.hex          @-addressed byte image (also drives the
+                                     assembler golden tests)
+  - sim/programs/<name>_words.svh    word list the testbench pokes into RAM
+                                     through the write port during reset
 
-Icarus hangs in a delta loop when $readmemh writes a memory that an always_comb
-reads and an always_ff writes, so $readmemh cannot be used for preloading in the
-core testbenches (see simple_ram.sv header). The {name}_words.svh payload is
-an `initial begin : prog_words ... PW[i] = {addr}; ... end` block; the testbench
-declares `logic [31:0] PW [0:N-1];` and includes the file after the declaration.
+$readmemh is avoided for preloading: Icarus delta-loops when it writes a
+memory that an always_comb reads (see simple_ram.sv header). The svh payload
+is `initial begin : prog_words ... PW[i] = <word>; ... end`, and each
+testbench declares `logic [31:0] PW [0:N-1];` then includes the file.
 Holes in the address map are filled with NOP words (0x00000000) so the word list
 is contiguous from byte 0 for the write-port loader.
 """

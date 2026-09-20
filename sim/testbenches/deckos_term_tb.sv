@@ -1,28 +1,18 @@
 // DeckOS-on-DeckCPU interactive terminal testbench.
 //
-// This is the transport that makes `make run-deckos` an interactive
-// terminal: it boots the same DeckOS image (sim/programs/
-// deckos_console_words.svh, assembled from deckos-port/deckcpu/console.s),
-// forwards every UART TX byte to its stdout (so a host terminal shows the
-// console's output) and feeds a named pipe (+rx=<fifo>, opened by the host
-// bridge) into the UART RX path one byte at a time. The CPU, bus, RAM, UART,
-// TIMER, GPIO and the DeckOS program do all the work; this module is only the
-// wire between the UART's terminal sink/source and the host.
+// The transport behind `make run-deckos`: boots the DeckOS console image,
+// forwards every UART TX byte to the host and feeds a named pipe (+rx=<fifo>)
+// into the UART RX path. The CPU, bus, RAM and DeckOS program do all the
+// work; this module is only the wire between UART and host.
 //
-// Two Icarus realities shaped the design:
-//   * $fgetc on the FIFO blocks the whole simulation (clock included), so the
-//     machine is only ever frozen on a byte boundary when the shell has
-//     nothing left to emit. After each pushed byte we therefore wait for that
-//     byte to be consumed (the shell is polled), drain its echo to the TX
-//     side, and for CR (line enter) wait for the next fresh "DeckOS> " prompt
-//     or an HALT before blocking for the next byte.
-//   * There is no non-blocking read, so input stays character-at-a-time; the
-//     shell's single-latch RX (a push into a still-unread slot replaces it)
-//     is honored by never pushing a byte while the previous one is unread —
-//     the bus RXD read (UART_BASE + 4) is the "consumed" signal.
+// Two iverilog realities shape it: $fgetc blocks the whole simulation, so the
+// machine only ever freezes on a byte boundary when the shell has nothing
+// left to emit (wait for the fresh prompt / HALT after a CR); and there is no
+// non-blocking read, so input stays character-at-a-time and we never push
+// while the previous byte sits unread in the single latch (the bus RXD read
+// is the "consumed" signal).
 //
-// Shutdown is clean on three paths: host EOF (bridge closed the FIFO), a
-// Control-C byte, and the shell's `exit` command (HALT sets dbg_halted).
+// Shutdown is clean on three paths: host EOF, Control-C, and `exit` (HALT).
 
 module deckos_term_tb
  import deckcpu_pkg::*;

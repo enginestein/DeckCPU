@@ -8,14 +8,14 @@
 ;
 ; called on top of the HAL it requires. DeckCPU has no C compiler backend
 ; yet, so this file states that loop in DeckCPU assembly: it keeps the same
-; structure — HAL (hal_dk.s) + a resident shell loop that polls the console,
-; line-edits, and dispatches commands through a command table — and talks to
+; structure HAL (hal_dk.s) + a resident shell loop that polls the console,
+; line-edits, and dispatches commands through a command table and talks to
 ; hardware only through the hal_* entry points, exactly as kernel/shell.c
 ; do on the ESP32/RP2040 ports.
 ;
 ; Exercises the DeckCPU HAL contract (see deckos-port/README.md):
 ;   console init/putchar/getchar/connected, time/sleep ticks, irq
-;   disable/restore, gpio set/set_mode/get — against the real UART, TIMER
+;   disable/restore, gpio set/set_mode/get against the real UART, TIMER
 ;   and GPIO MMIO devices, verified by sim/testbenches/deckos_tb.sv.
 ;
 ; Polled shell: interrupts are never enabled (FLAGS.I stays 0).

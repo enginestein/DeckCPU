@@ -179,7 +179,7 @@ def gen_isa_md(isa):
     L.append("## Instruction encoding formats")
     L.append("")
     for fname, fmt in isa["formats"].items():
-        L.append(f"### {fname} — {fmt['desc']}")
+        L.append(f"### {fname} {fmt['desc']}")
         L.append("")
         rows = []
         for fld, f in fmt["fields"].items():

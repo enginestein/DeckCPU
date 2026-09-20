@@ -1,28 +1,12 @@
 #!/usr/bin/env python3
-"""DeckCPU / DeckOS interactive host terminal bridge.
+"""Host terminal bridge for the DeckCPU netlist sims.
 
-`make run-deckos` launches the DeckCPU netlist simulation (vvp) with this
-script, which is only the transport between your terminal and the simulated
-UART:
-
-host terminal <-> this bridge <-> UART RX/TX (RTL) <-> DeckCPU <-> DeckOS console
-
-The CPU, bus, RAM, UART and the DeckOS console program do all of the work;
-this script never emulates a command, calculates a result, or reaches into
-simulated RAM. It just:
-
-  * creates a FIFO and starts `vvp <binary> +rx=<fifo>`;
-  * forwards every UART TX byte (emitted as raw bytes on the simulator's
-    stdout) to your terminal;
-  * forwards your keystrokes into the FIFO so they enter through the UART RX
-    path (rx_push/rx_byte), one byte at a time;
-  * terminates cleanly on Ctrl-C (0x03), Ctrl-D / EOF (0x04 / stdin EOF),
-    or when the simulator itself exits (the DeckOS `exit` command HALTs the
-    CPU and the testbench $finishes; the shell's stdout then closes).
-
-Terminal settings are always restored (raw/cbreak are only used while the
-terminal is attached) and the vvp child is always waited/terminated so no
-orphan processes are left behind.
+`make run-deckos` starts vvp with this script, which only connects your
+terminal to the simulated UART: it makes a FIFO, forwards the console's TX
+bytes to you, sends your keystrokes back through the UART RX path, and quits
+on Ctrl-C / EOF / the shell `exit`. It never emulates anything itself; the
+DeckCPU runs the image. Terminal settings and the vvp child are always
+cleaned up on the way out.
 
 Usage: deckcpu_terminal.py [path-to-vvp-binary]
 """

@@ -1,4 +1,4 @@
-; DeckCPU HAL — DeckOS lower-layer subset for the DeckCPU target.
+; DeckCPU HAL DeckOS lower-layer subset for the DeckCPU target.
 ;
 ; The DeckOS portable core (kernel.c / shell.c / commands.c, etc.) talks to
 ; hardware exclusively through a HAL whose concrete per-target implementations
@@ -40,7 +40,7 @@ hal_console_init:               ; power up the UART (TX+RX) and start the TIMER
         ; TIMER: COUNT must free-run every clock for hal_time_ticks. The model
         ; freezes in one-shot mode when COUNT == COMPARE, and COMPARE resets to
         ; 0 (which COUNT would equal immediately on enable), so configure a
-        ; huge COMPARE with REPEAT mode — the same approach DeckOS's ESP32 HAL
+        ; huge COMPARE with REPEAT mode the same approach DeckOS's ESP32 HAL
         ; takes (COMPARE = ULONG_MAX). COUNT then just counts upward.
         ; NOTE: LIH zeroes the low half, so LIH-then-ORI (not LI-then-LIH)
         ; builds a full 32-bit constant on this ISA.
